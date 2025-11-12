@@ -22,7 +22,6 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.hc.client5.http.SystemDefaultDnsResolver;
@@ -80,9 +79,13 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.performetriks.performator.base.PFR;
+import com.performetriks.performator.http.PFRHttp.PFRHttpSection;
 import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
+import com.xresch.hsr.stats.HSRRecord;
+import com.xresch.hsr.stats.HSRRecord.HSRRecordStatus;
+import com.xresch.hsr.utils.HSRText.CheckType;
 import com.xresch.hsr.utils.HSRTime.HSRTimeUnit;
 
 import ch.qos.logback.classic.Level;
@@ -126,6 +129,11 @@ public class PFRHttp {
 		, NTLM
 		  /* Kerberos: untested, deprecated, experimental */
 		, KERBEROS 
+	}
+	
+	public enum PFRHttpSection{
+		  HEADER
+		, BODY
 	}
 
 	
@@ -254,7 +262,7 @@ public class PFRHttp {
 			if(proxyPacPath.toLowerCase().startsWith("http")) {
 				//------------------------------
 				// Get PAC from URL
-				PFRHttpResponse response = null;
+				Response response = null;
 				
 				try {	
 					
@@ -620,23 +628,150 @@ public class PFRHttp {
 //	}
 		
 
+//	/******************************************************************************************************
+//	 * Send a HTTP POST request and returns the result or null in case of error.
+//	 * @param url used for the request.
+//	 * @param params the parameters which should be added to the requests post body or null
+//	 * @param headers the HTTP headers for the request or null
+//	 * @return String response
+//	 ******************************************************************************************************/
+//	public static Response sendPOSTRequest(String url, HashMap<String, String> params, HashMap<String, String> headers) {
+//		
+//		return PFRHttp.create(url)
+//					.POST()
+//					.headers(headers)
+//					.params(params)
+//					.send();
+//	    	
+//	}
+
 	/******************************************************************************************************
-	 * Send a HTTP POST request and returns the result or null in case of error.
-	 * @param url used for the request.
-	 * @param params the parameters which should be added to the requests post body or null
-	 * @param headers the HTTP headers for the request or null
-	 * @return String response
+	 * Inner Class for HTTP Checks
 	 ******************************************************************************************************/
-	public static PFRHttpResponse sendPOSTRequest(String url, HashMap<String, String> params, HashMap<String, String> headers) {
+	public class PFRHttpCheck {
 		
-		return PFRHttp.create(url)
-					.POST()
-					.headers(headers)
-					.params(params)
-					.send();
-	    	
+		private CheckType checkType;
+		private PFRHttpSection section = PFRHttpSection.BODY;
+		private String messageOnFail = null;
+		
+		private String valueToCheck = null;
+		
+		private String headerName = null;
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		public PFRHttpCheck(CheckType checkType) {
+			this.checkType = checkType;
+		}
+		
+		/***********************************************
+		 * Set to check the body
+		 ***********************************************/
+		public PFRHttpCheck checkBody(String valueToCheck) {
+			section = PFRHttpSection.BODY;
+			this.valueToCheck = valueToCheck;
+			
+			return this;
+		}
+		
+		/***********************************************
+		 * Set to check the header
+		 ***********************************************/
+		public PFRHttpCheck checkHeader(String headerName, String valueToCheck) {
+			section = PFRHttpSection.HEADER;
+			this.headerName = headerName;
+			this.valueToCheck = valueToCheck;
+			
+			return this;
+		}
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		public PFRHttpCheck messageOnFail(String message) {
+			this.messageOnFail = message;
+			return this;
+		}
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		public boolean check(Response r) {
+			
+			if(r == null 
+			|| r.hasError
+			){ return false; }
+			
+			switch (section) {
+				case BODY: 		return checkBody(r);
+				case HEADER:	return checkHeader(r);
+				default: 		return false;
+			}
+
+		}
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		private boolean checkBody(Response r) {
+			
+			boolean success = HSR.Text.checkTextForContent(checkType, r.body, valueToCheck);
+			
+			if(!success) { logMessage(r); }
+			
+			return success;
+		}
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		private boolean checkHeader(Response r) {
+			
+			String headerValue = r.getHeadersAsJson().get(headerName).getAsString();
+
+			boolean success = HSR.Text.checkTextForContent(checkType, headerValue, valueToCheck);
+			
+			if(!success) { logMessage(r); }
+			
+			return success;
+		}
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		private void logMessage(Response r) {
+
+			String finalMessage = (messageOnFail != null) ? messageOnFail : createDefaultMessage();
+			
+			r.responseLogger.error(finalMessage);
+			
+			HSR.addErrorMessage(finalMessage)
+				.parent(r.record)
+				;
+			
+		}
+		
+		
+		/***********************************************
+		 * 
+		 ***********************************************/
+		private String createDefaultMessage() {
+
+			return new StringBuilder()
+					.append("HTTP response check failed: ")
+					.append(section.toString().toLowerCase())
+					.append(" ")
+					.append( (headerName != null) ? "\""+headerName+"\"" : "")
+					.append(checkType.toString())
+					.append(" \"")
+					.append(valueToCheck)
+					.append("\"")
+					.toString()
+					;
+		}
+		
 	}
-	
 	
 	/******************************************************************************************************
 	 * Inner Class for HTTP Response
@@ -657,6 +792,8 @@ public class PFRHttp {
 		private boolean autoCloseClient = true;
 		long responseTimeoutMillis = HSRTimeUnit.m.toMillis(10); //default timeout of  10 minutes
 
+		private ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
+		
 		private HashMap<String, String> params = new HashMap<>();
 		private HashMap<String, String> headers = new HashMap<>();
 		
@@ -804,11 +941,38 @@ public class PFRHttp {
 		}
 		
 		/***********************************************
+		 * Add a check to the list of checks.
+		 * @return instance of chaining
+		 ***********************************************/
+		public PFRHttpRequestBuilder checkBodyContains(String value) {
+			this.check(new PFRHttpCheck(CheckType.CONTAINS).checkBody(value) );
+			return this;
+		}
+		
+		/***********************************************
+		 * Add a check to the list of checks.
+		 * @return instance of chaining
+		 ***********************************************/
+		public PFRHttpRequestBuilder checkBody(CheckType type, String value) {
+			
+			this.check( new PFRHttpCheck(type).checkBody(value) );
+			return this;
+		}
+		
+		/***********************************************
+		 * Add a check to the list of checks.
+		 * @return instance of chaining
+		 ***********************************************/
+		public void check(PFRHttpCheck check) {
+			checksList.add(check);
+		}
+		
+		/***********************************************
 		 * Build and send the request. Returns a 
 		 * PRFHttpResponse or null in case of errors.
 		 ***********************************************/
 		@SuppressWarnings("deprecation")
-		public PFRHttpResponse send() {
+		public Response send() {
 			
 			try {
 				
@@ -971,17 +1135,20 @@ public class PFRHttp {
 
 					CloseableHttpClient httpClient = clientBuilder.build();
 
-					PFRHttpResponse response = instance.new PFRHttpResponse(this, httpClient, requestBase, autoCloseClient);
+					Response response = instance.new Response(this, httpClient, requestBase, autoCloseClient);
 					return response;
 					
 				}
 			} catch (Throwable e) {
-				logger
-					.error("Exception occured: "+e.getMessage(), e);
+				
+				logger.error("Exception while sending HTTP Request: "+e.getMessage(), e);
 			} 
-
-			return null;		
+			
+			return  instance.new Response(this);
+			
 		}
+		
+		
 	}
 	
 	/**************************************************************************************
@@ -1090,25 +1257,37 @@ public class PFRHttp {
 	/******************************************************************************************************
 	 * Inner Class for HTTP Response
 	 ******************************************************************************************************/
-	public class PFRHttpResponse {
+	public class Response {
 		
-		private Logger responseLogger = (Logger) LoggerFactory.getLogger(PFRHttpResponse.class.getName());
+		private Logger responseLogger = (Logger) LoggerFactory.getLogger(Response.class.getName());
 		
+		CloseableHttpClient httpClient = null;
 		private URL url;
 		private String body;
 		private int status = 500;
 		private long duration = -1;
-		private Header[] headers;
 		
-		private boolean errorOccured = false;
+		private Header[] headers;
+		private JsonObject headersAsJsonCached;
+		
+		private HSRRecord record = null;
+		private boolean hasError = false;
+		private boolean checksSuccess = true;
 		private String errorMessage = null;
 		
-		CloseableHttpClient httpClient = null;
+		
+		/******************************************************************************************************
+		 * empty response in case of errors, done to avoid null pointer exceptions.
+		 ******************************************************************************************************/
+		protected Response(PFRHttpRequestBuilder request) {
+			this.hasError = true;
+			this.checksSuccess = true;
+		}
 
 		/******************************************************************************************************
 		 * 
 		 ******************************************************************************************************/
-		public PFRHttpResponse(PFRHttpRequestBuilder request, CloseableHttpClient httpClient, HttpUriRequestBase requestBase, boolean autoCloseClient) {
+		public Response(PFRHttpRequestBuilder request, CloseableHttpClient httpClient, HttpUriRequestBase requestBase, boolean autoCloseClient) {
 			
 			this.httpClient = httpClient;
 			
@@ -1118,9 +1297,9 @@ public class PFRHttp {
 			try {
 				url = requestBase.getUri().toURL();
 			} catch (Exception e) {
-				errorOccured = true;
+				hasError = true;
 				logger.error("URL is malformed:"+e.getMessage(), e);
-				return ;
+				return;
 			}
 			
 			//----------------------------------
@@ -1128,32 +1307,56 @@ public class PFRHttp {
 			long startMillis = System.currentTimeMillis();
 			try {
 				
+				//--------------------------
+				// Start Measurement
 				if(metric != null) { HSR.start(metric); }
-				Boolean success = httpClient.execute(requestBase, new HttpClientResponseHandler<Boolean>() {
-					@Override
-					public Boolean handleResponse(ClassicHttpResponse response) throws HttpException, IOException {
-						
-						if(metric != null) { HSR.end(); }
-						
-						if(response != null) {
-							status = response.getCode();
-							headers = response.getHeaders();
-							
-							HttpEntity entity = response.getEntity();
-							if(entity != null) {
-								body = EntityUtils.toString(response.getEntity());
-							}
-
-						}
-						return true;
-					}
-				});
 				
+					//--------------------------
+					// Execute Request
+					Boolean success = httpClient.execute(requestBase, new HttpClientResponseHandler<Boolean>() {
+						@Override
+						public Boolean handleResponse(ClassicHttpResponse response) throws HttpException, IOException {
+													
+							if(response != null) {
+								status = response.getCode();
+								headers = response.getHeaders();
+								
+								HttpEntity entity = response.getEntity();
+								if(entity != null) {
+									body = EntityUtils.toString(response.getEntity());
+								}
+	
+							}
+							return true;
+						}
+					});
+					
+				//--------------------------
+				// End Measurement	
+				if(metric != null) { 
+					record = HSR.end(status < 400); 
+				}
+				
+				//--------------------------
+				// Do Checks
+				for(PFRHttpCheck check : request.checksList) {
+					
+					checksSuccess &= check.check(this);
+					
+					if(!checksSuccess) { 
+						record.status(HSRRecordStatus.Failed); 
+						break;
+					}
+				}
+					
 				
 			} catch (IOException e) {
-				errorOccured = true;
+				
+				if(metric != null) { record = HSR.end(false); }
+				
+				hasError = true;
 				errorMessage = e.getMessage();
-				responseLogger.warn("Exception occured during HTTP request:"+e.getMessage(), e);
+				responseLogger.warn("Exception during HTTP request:"+e.getMessage(), e);
 				
 			}finally {
 				long endMillis = System.currentTimeMillis();
@@ -1175,11 +1378,47 @@ public class PFRHttp {
 		}
 		
 		/******************************************************************************************************
+		 * Set a custom status for the record.
+		 ******************************************************************************************************/
+		public void setStatus(HSRRecordStatus status) {
+			if(record != null) {
+				record.status(status);
+			}
+		}
+		
+		/************************************************************************
+		 * Returns true if:
+		 * 	- there was no error
+		 *  - none of the checks failed
+		 *  - all the checks where successful
+		 ************************************************************************/
+		public boolean isSuccess() {
+			
+			if(this.getStatus() >= 400
+			|| this.hasError()
+			|| this.checksSuccessful()
+			){ 
+				return false; 
+			};
+			
+			return true;
+		}
+		
+		/******************************************************************************************************
+		 * Returns true if a check has failed.
+		 ******************************************************************************************************/
+		public boolean checksSuccessful() {
+			return checksSuccess;
+		}
+		
+		/******************************************************************************************************
 		 * 
 		 ******************************************************************************************************/
-		public boolean errorOccured() {
-			return errorOccured;
+		public boolean hasError() {
+			return hasError;
 		}
+		
+		
 		
 		/******************************************************************************************************
 		 * 
@@ -1193,6 +1432,25 @@ public class PFRHttp {
 		 ******************************************************************************************************/
 		public URL getURL() {
 			return url;
+		}
+		
+		/******************************************************************************************************
+		 * Check if the response body contains a specific string.
+		 * 
+		 * @param contains the value that should be contained
+		 * @param failMessage message to log if not found, 
+		 ******************************************************************************************************/
+		public boolean bodyContains(String value, String failMessage) {
+			
+			if(body == null) { return false; }
+			
+			if(body.contains(value)) { 
+				return true; 
+			}else{
+				if(failMessage != null ) {	responseLogger.error(failMessage); }
+				return false;
+			}
+
 		}
 		
 		/******************************************************************************************************
@@ -1343,15 +1601,19 @@ public class PFRHttp {
 		 ******************************************************************************************************/
 		public JsonObject getHeadersAsJson() {
 			
-			JsonObject object = new JsonObject();
-			for(Header entry : headers) {
-				
-				if(entry.getName() != null) {
-					object.addProperty(entry.getName(), entry.getValue());
+			if(headersAsJsonCached == null) {
+				JsonObject object = new JsonObject();
+				for(Header entry : headers) {
+					
+					if(entry.getName() != null) {
+						object.addProperty(entry.getName(), entry.getValue());
+					}
 				}
+				
+				headersAsJsonCached = object;
 			}
 			
-			return object;
+			return headersAsJsonCached;
 		}
 		
 	}
