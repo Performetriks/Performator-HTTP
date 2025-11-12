@@ -79,7 +79,6 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.performetriks.performator.base.PFR;
-import com.performetriks.performator.http.PFRHttp.PFRHttpSection;
 import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
@@ -93,7 +92,7 @@ import ch.qos.logback.classic.Logger;
 
 /**************************************************************************************************************
  * 
- * @author Reto Scheiwiller, (c) Copyright 2019 
+ * @author Reto Scheiwiller, (c) Copyright 2025
  * @license MIT-License
  **************************************************************************************************************/
 public class PFRHttp {
@@ -117,6 +116,9 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> keystorePW = new InheritableThreadLocal<>();
 	private static InheritableThreadLocal<String> keystoreManagerPW = new InheritableThreadLocal<>();
 	
+	private static ThreadLocal<Boolean> debugLogAll = InheritableThreadLocal.withInitial(() -> Boolean.FALSE);
+	private static ThreadLocal<Boolean> debugLogFail = InheritableThreadLocal.withInitial(() -> Boolean.FALSE);
+		
 	
 	public enum PFRHttpAuthMethod{
 		/* Digest authentication with the Apache HttpClient */
@@ -136,6 +138,20 @@ public class PFRHttp {
 		, BODY
 	}
 
+	/******************************************************************************************************
+	 * Enable debug logs for the current user thread for all request, regardless if they are successful
+	 * or failing.
+	 ******************************************************************************************************/
+	public static void debugLogAll(boolean enable) {
+		PFRHttp.debugLogAll.set(enable);
+	}
+	
+	/******************************************************************************************************
+	 * Enable debug logs for the current user thread for failing requests.
+	 ******************************************************************************************************/
+	public static void debugLogFail(boolean enable) {
+		PFRHttp.debugLogFail.set(enable);
+	}
 	
 	/******************************************************************************************************
 	 * 
@@ -1261,6 +1277,7 @@ public class PFRHttp {
 		
 		private Logger responseLogger = (Logger) LoggerFactory.getLogger(Response.class.getName());
 		
+		private PFRHttpRequestBuilder request;
 		CloseableHttpClient httpClient = null;
 		private URL url;
 		private String body;
@@ -1272,7 +1289,7 @@ public class PFRHttp {
 		
 		private HSRRecord record = null;
 		private boolean hasError = false;
-		private boolean checksSuccess = true;
+		private boolean checksSuccessful = true;
 		private String errorMessage = null;
 		
 		
@@ -1281,7 +1298,7 @@ public class PFRHttp {
 		 ******************************************************************************************************/
 		protected Response(PFRHttpRequestBuilder request) {
 			this.hasError = true;
-			this.checksSuccess = true;
+			this.checksSuccessful = false;
 		}
 
 		/******************************************************************************************************
@@ -1289,6 +1306,7 @@ public class PFRHttp {
 		 ******************************************************************************************************/
 		public Response(PFRHttpRequestBuilder request, CloseableHttpClient httpClient, HttpUriRequestBase requestBase, boolean autoCloseClient) {
 			
+			this.request = request;
 			this.httpClient = httpClient;
 			
 			String metric = request.metricName;
@@ -1341,9 +1359,9 @@ public class PFRHttp {
 				// Do Checks
 				for(PFRHttpCheck check : request.checksList) {
 					
-					checksSuccess &= check.check(this);
+					checksSuccessful &= check.check(this);
 					
-					if(!checksSuccess) { 
+					if(!checksSuccessful) { 
 						record.status(HSRRecordStatus.Failed); 
 						break;
 					}
@@ -1359,6 +1377,12 @@ public class PFRHttp {
 				responseLogger.warn("Exception during HTTP request:"+e.getMessage(), e);
 				
 			}finally {
+				
+				if(debugLogAll.get()
+				|| debugLogFail.get() && !this.isSuccess()) {
+					printDebugLog();
+				}
+					
 				long endMillis = System.currentTimeMillis();
 				duration = endMillis - startMillis;
 				
@@ -1368,6 +1392,36 @@ public class PFRHttp {
 			}
 		}
 		
+		/******************************************************************************************************
+		 * 
+		 ******************************************************************************************************/
+		public void printDebugLog() {
+			
+			String paramsString = (request.params == null) ? "null" : Joiner.on("&").withKeyValueSeparator("=").join(request.params);
+			String headersString = (request.headers == null) ? "null" : Joiner.on(",").withKeyValueSeparator("=").join(request.headers);
+			
+			StringBuilder builder = new StringBuilder();
+			builder.append("\n====================================== Debug Log ======================================");
+			builder.append("\nMetric Name: "+request.metricName);
+			builder.append("\n---------------- REQUEST ----------------");
+			builder.append("\nURL:         "+request.URL);
+			builder.append("\nMethod:      "+request.method);
+			builder.append("\nParams:      "+paramsString);
+			builder.append("\nHeaders:     "+headersString);
+			builder.append("\nBody:\n"+request.requestBody);
+			builder.append("\n---------------- RESPONSE ----------------");
+			builder.append("\nStatus:     "+this.getStatus());
+			builder.append("\nChecks OK:  "+this.checksSuccessful());
+			builder.append("\nHas Error:  "+this.hasError());
+			builder.append("\nError:      "+this.errorMessage());
+			builder.append("\nDuration:   "+this.getDuration());
+			builder.append("\nHeaders:    "+this.getHeadersAsJson().toString());
+			builder.append("\nBody:\n"+this.body);
+
+			builder.append("\n========================================================================================");
+			
+			logger.error(builder.toString());
+		}
 		/******************************************************************************************************
 		 * 
 		 ******************************************************************************************************/
@@ -1396,7 +1450,7 @@ public class PFRHttp {
 			
 			if(this.getStatus() >= 400
 			|| this.hasError()
-			|| this.checksSuccessful()
+			|| !this.checksSuccessful()
 			){ 
 				return false; 
 			};
@@ -1408,7 +1462,7 @@ public class PFRHttp {
 		 * Returns true if a check has failed.
 		 ******************************************************************************************************/
 		public boolean checksSuccessful() {
-			return checksSuccess;
+			return checksSuccessful;
 		}
 		
 		/******************************************************************************************************
@@ -1417,8 +1471,6 @@ public class PFRHttp {
 		public boolean hasError() {
 			return hasError;
 		}
-		
-		
 		
 		/******************************************************************************************************
 		 * 
@@ -1434,24 +1486,6 @@ public class PFRHttp {
 			return url;
 		}
 		
-		/******************************************************************************************************
-		 * Check if the response body contains a specific string.
-		 * 
-		 * @param contains the value that should be contained
-		 * @param failMessage message to log if not found, 
-		 ******************************************************************************************************/
-		public boolean bodyContains(String value, String failMessage) {
-			
-			if(body == null) { return false; }
-			
-			if(body.contains(value)) { 
-				return true; 
-			}else{
-				if(failMessage != null ) {	responseLogger.error(failMessage); }
-				return false;
-			}
-
-		}
 		
 		/******************************************************************************************************
 		 * Get the body content of the response.
