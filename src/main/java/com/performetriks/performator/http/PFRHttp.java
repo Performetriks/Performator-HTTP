@@ -33,6 +33,7 @@ import org.apache.hc.client5.http.auth.NTCredentials;
 import org.apache.hc.client5.http.auth.StandardAuthScheme;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.config.RequestConfig;
+import org.apache.hc.client5.http.cookie.BasicCookieStore;
 import org.apache.hc.client5.http.impl.auth.BasicScheme;
 import org.apache.hc.client5.http.impl.auth.BasicSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.CredentialsProviderBuilder;
@@ -116,6 +117,8 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> keystorePW = new InheritableThreadLocal<>();
 	private static InheritableThreadLocal<String> keystoreManagerPW = new InheritableThreadLocal<>();
 	
+	private static ThreadLocal<BasicCookieStore> cookieStore = InheritableThreadLocal.withInitial(() -> new BasicCookieStore());
+	  
 	private static ThreadLocal<Boolean> debugLogAll = InheritableThreadLocal.withInitial(() -> Boolean.FALSE);
 	private static ThreadLocal<Boolean> debugLogFail = InheritableThreadLocal.withInitial(() -> Boolean.FALSE);
 		
@@ -583,20 +586,27 @@ public class PFRHttp {
 					+"================================ End of Details ================================"
 					);
 
-
 		}
 	}
 	
 	/******************************************************************************************************
-	 * Send a HTTP GET request and returns the result or null in case of error.
-	 * @param url used for the request.
-	 * @param params the parameters which should be added to the request or null
-	 * @return PRFHttpResponse response or null
+	 * Adds a basic Authorization header to the list of headers
+	 * @param headers used for the request.
+	 * @param basicUsername
+	 * @param basicPassword
 	 ******************************************************************************************************/
-	public static void addBasicAuthorizationHeader(HashMap<String, String> params, String basicUsername, String basicPassword) {
+	public static void addBasicAuthorizationHeader(HashMap<String, String> headers, String basicUsername, String basicPassword) {
 		
 		String valueToEncode = basicUsername + ":" + basicPassword;
-		params.put("Authorization", "Basic "+Base64.getEncoder().encodeToString(valueToEncode.getBytes()));	    	
+		headers.put("Authorization", "Basic "+Base64.getEncoder().encodeToString(valueToEncode.getBytes()));	    	
+	}
+	
+	/******************************************************************************************************
+	 * Clears the cookies for the current user thread.
+	 ******************************************************************************************************/
+	public static void clearCookies() {
+		
+		cookieStore.set(new BasicCookieStore());
 	}
 	
 	/******************************************************************************************************
@@ -1031,6 +1041,7 @@ public class PFRHttp {
 					// Create HTTP Client
 					
 					HttpClientBuilder clientBuilder = HttpClientBuilder.create();
+					clientBuilder.setDefaultCookieStore(cookieStore.get());
 					clientBuilder.setDefaultRequestConfig(
 								 RequestConfig
 										.custom()
@@ -1456,6 +1467,20 @@ public class PFRHttp {
 			};
 			
 			return true;
+		}
+		
+		/******************************************************************************************************
+		 * If the response has an error, this method will throw an exception. This can be used to work with 
+		 * try-catch mechanisms to simplify code structures.
+		 * The response that failed can be retrieved with ResponseFailedException.getResponse().
+		 ******************************************************************************************************/
+		public Response throwOnFail() throws ResponseFailedException {
+			
+			if(!isSuccess()) {
+				throw new ResponseFailedException(this);
+			}
+			
+			return this;
 		}
 		
 		/******************************************************************************************************
