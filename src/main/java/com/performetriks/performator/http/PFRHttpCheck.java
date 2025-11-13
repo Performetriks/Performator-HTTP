@@ -1,12 +1,18 @@
 package com.performetriks.performator.http;
 
+import com.performetriks.performator.base.PFRContext;
 import com.performetriks.performator.http.PFRHttp.PFRHttpSection;
 import com.xresch.hsr.base.HSR;
 import com.xresch.hsr.utils.HSRText.CheckType;
 
-/******************************************************************************************************
- * Inner Class for HTTP Checks
- ******************************************************************************************************/
+/***************************************************************************
+ * 
+ * Copyright Owner: Performetriks GmbH, Switzerland
+ * License: Eclipse Public License v2.0
+ * 
+ * @author Reto Scheiwiller
+ * 
+ ***************************************************************************/
 public class PFRHttpCheck {
 	
 	private CheckType checkType;
@@ -16,12 +22,23 @@ public class PFRHttpCheck {
 	private String valueToCheck = null;
 	
 	private String headerName = null;
+	private boolean appendLogDetails = true;
 	
 	/***********************************************
 	 * 
 	 ***********************************************/
 	public PFRHttpCheck(CheckType checkType) {
 		this.checkType = checkType;
+	}
+	
+	/***********************************************
+	 * Set if logDetails retrieved from PFRContext
+	 * should be appended to log messages when a check
+	 * fails. 
+	 ***********************************************/
+	public PFRHttpCheck appendLogDetails(boolean appendLogDetails) {
+		this.appendLogDetails = appendLogDetails;
+		return this;
 	}
 	
 	/***********************************************
@@ -46,7 +63,17 @@ public class PFRHttpCheck {
 	}
 	
 	/***********************************************
-	 * 
+	 * Set to check the body
+	 ***********************************************/
+	public PFRHttpCheck checkStatus(int valueToCheck) {
+		section = PFRHttpSection.STATUS;
+		this.valueToCheck = ""+valueToCheck;
+		
+		return this;
+	}
+	
+	/***********************************************
+	 * Define a custom log message for when the check fails
 	 ***********************************************/
 	public PFRHttpCheck messageOnFail(String message) {
 		this.messageOnFail = message;
@@ -65,6 +92,7 @@ public class PFRHttpCheck {
 		switch (section) {
 			case BODY: 		return checkBody(r);
 			case HEADER:	return checkHeader(r);
+			case STATUS:	return checkStatus(r);
 			default: 		return false;
 		}
 
@@ -99,15 +127,29 @@ public class PFRHttpCheck {
 	/***********************************************
 	 * 
 	 ***********************************************/
+	private boolean checkStatus(PFRHttpResponse r) {
+		
+		boolean success = HSR.Text.checkTextForContent(checkType, r.getStatus()+"", valueToCheck);
+		
+		if(!success) { logMessage(r); }
+		
+		return success;
+	}
+	
+	/***********************************************
+	 * 
+	 ***********************************************/
 	private void logMessage(PFRHttpResponse r) {
 
 		String finalMessage = (messageOnFail != null) ? messageOnFail : createDefaultMessage();
 		
+		if(appendLogDetails) {
+			finalMessage += PFRContext.logDetailsString();
+		}
+		
 		r.responseLogger.error(finalMessage);
 		
-		HSR.addErrorMessage(finalMessage)
-			.parent(r.record)
-			;
+		HSR.addErrorMessage(finalMessage).parent(r.record);
 		
 	}
 	

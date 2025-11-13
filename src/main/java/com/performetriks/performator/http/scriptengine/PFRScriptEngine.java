@@ -8,6 +8,14 @@ import javax.script.ScriptException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/***************************************************************************
+ * 
+ * Copyright Owner: Performetriks GmbH, Switzerland
+ * License: Eclipse Public License v2.0
+ * 
+ * @author Reto Scheiwiller
+ * 
+ ***************************************************************************/
 public class PFRScriptEngine {
 	
 	private ScriptEngine engine = null;

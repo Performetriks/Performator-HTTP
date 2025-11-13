@@ -11,7 +11,14 @@ import org.slf4j.LoggerFactory;
 
 import ch.qos.logback.classic.Logger;
 
-
+/***************************************************************************
+ * 
+ * Copyright Owner: Performetriks GmbH, Switzerland
+ * License: Eclipse Public License v2.0
+ * 
+ * @author Reto Scheiwiller
+ * 
+ ***************************************************************************/
 public class PFRScripting {
 	
 	private static final Logger logger = (ch.qos.logback.classic.Logger)LoggerFactory.getLogger(PFRScripting.class.getName());

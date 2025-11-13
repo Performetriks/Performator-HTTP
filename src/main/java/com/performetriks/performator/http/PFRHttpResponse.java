@@ -22,15 +22,21 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.performetriks.performator.base.PFR;
+import com.performetriks.performator.base.PFRContext;
 import com.xresch.hsr.base.HSR;
 import com.xresch.hsr.stats.HSRRecord;
 import com.xresch.hsr.stats.HSRRecord.HSRRecordStatus;
 
 import ch.qos.logback.classic.Logger;
 
-/******************************************************************************************************
- * Inner Class for HTTP Response
- ******************************************************************************************************/
+/***************************************************************************
+ * 
+ * Copyright Owner: Performetriks GmbH, Switzerland
+ * License: Eclipse Public License v2.0
+ * 
+ * @author Reto Scheiwiller
+ * 
+ ***************************************************************************/
 public class PFRHttpResponse {
 	
 	Logger responseLogger = (Logger) LoggerFactory.getLogger(PFRHttpResponse.class.getName());
@@ -39,7 +45,7 @@ public class PFRHttpResponse {
 	CloseableHttpClient httpClient = null;
 	private URL url;
 	String body;
-	private int status = 500;
+	private int status = -1;
 	private long duration = -1;
 	
 	private Header[] headers;
@@ -109,8 +115,11 @@ public class PFRHttpResponse {
 				
 			//--------------------------
 			// End Measurement	
-			if(metric != null) { 
-				record = HSR.end(status < 400); 
+			if(metric != null) {
+				record = HSR.end(isSuccess())
+							.code(""+status)
+							; 
+				
 			}
 			
 			//--------------------------
@@ -120,7 +129,7 @@ public class PFRHttpResponse {
 				checksSuccessful &= check.check(this);
 				
 				if(!checksSuccessful) { 
-					record.status(HSRRecordStatus.Failed); 
+					record.status(HSRRecordStatus.Failed); //override status
 					break;
 				}
 			}
@@ -128,7 +137,10 @@ public class PFRHttpResponse {
 			
 		} catch (IOException e) {
 			
-			if(metric != null) { record = HSR.end(false); }
+			if(metric != null) { 
+				record = HSR.end(false)
+							.code(""+status);
+			}
 			
 			hasError = true;
 			errorMessage = e.getMessage();
@@ -155,8 +167,8 @@ public class PFRHttpResponse {
 	 ******************************************************************************************************/
 	public void printDebugLog() {
 		
-		String paramsString = (request.params == null) ? "null" : Joiner.on("&").withKeyValueSeparator("=").join(request.params);
-		String headersString = (request.headers == null) ? "null" : Joiner.on(",").withKeyValueSeparator("=").join(request.headers);
+		String paramsString = (request.params == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.params);
+		String headersString = (request.headers == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.headers);
 		
 		CookieStore cookies = PFRHttp.cookieStore.get();
 		
@@ -167,27 +179,33 @@ public class PFRHttpResponse {
 		}
 		String cookieHeader = sb.toString();
 		
-		String p = "\n# ";
+		String p = "\n### ";
 		StringBuilder builder = new StringBuilder();
-		builder.append("\n\n#################################### Debug Log ####################################");
+		builder.append("Debug Log");
+		builder.append("\n########");
+		builder.append("\n##################");
+		builder.append("\n#########################################");
+		builder.append("\n###################################################################################");
 		builder.append(p+"Metric Name: "+request.metricName);
 		builder.append(p+"Thread Name: ["+Thread.currentThread().getName()+"]");
+		builder.append(p+"Log Details: "+PFRContext.logDetailsString().trim() );
 		builder.append(p+"---------------- REQUEST ----------------");
 		builder.append(p+"URL:         "+request.URL);
 		builder.append(p+"Method:      "+request.method);
 		builder.append(p+"Params:      "+paramsString);
 		builder.append(p+"Headers:     "+headersString);
 		builder.append(p+"Cookies:     "+cookieHeader);
-		builder.append(p+"Body:\n"+( (request.requestBody == null) ? "" : p + request.requestBody.replace("\n", p)) );
+		builder.append(p+"Body: "+( (request.body == null) ? "" : p + request.body.replace("\n", p)) );
 		builder.append(p+"---------------- RESPONSE ----------------");
 		builder.append(p+"Status:     "+this.getStatus());
-		builder.append(p+"Checks OK:  "+this.checksSuccessful());
-		builder.append(p+"Has Error:  "+this.hasError());
-		builder.append(p+"Error:      "+this.errorMessage());
+		builder.append(p+"Checks OK:  "+this.checksSuccessful()).append(", HasError: "+this.hasError()).append( ( (errorMessage == null) ? "" : ", Error: " + errorMessage.replace("\n", p)) );
 		builder.append(p+"Duration:   "+this.getDuration());
 		builder.append(p+"Headers:    "+this.getHeadersAsJson().toString());
 		builder.append(p+"Body:"+ ( (body == null) ? "" : p + body.replace("\n", p)) );
-		builder.append("\n###################################################################################\n");
+		builder.append("\n###################################################################################");
+		builder.append("\n#########################################");
+		builder.append("\n##################");
+		builder.append("\n########\n");
 
 		
 		PFRHttp.logger.error(builder.toString());
@@ -218,7 +236,7 @@ public class PFRHttpResponse {
 	 ************************************************************************/
 	public boolean isSuccess() {
 		
-		if(this.getStatus() >= 400
+		if( (this.getStatus() >= 400 && request.autoFailOnHTTPErrors )
 		|| this.hasError()
 		|| !this.checksSuccessful()
 		){ 

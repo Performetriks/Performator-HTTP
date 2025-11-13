@@ -47,11 +47,14 @@ import com.xresch.hsr.base.HSR;
 
 import ch.qos.logback.classic.Logger;
 
-/**************************************************************************************************************
+/***************************************************************************
  * 
- * @author Reto Scheiwiller, (c) Copyright 2025
- * @license MIT-License
- **************************************************************************************************************/
+ * Copyright Owner: Performetriks GmbH, Switzerland
+ * License: Eclipse Public License v2.0
+ * 
+ * @author Reto Scheiwiller
+ * 
+ ***************************************************************************/
 public class PFRHttp {
 	
 	static Logger logger = (ch.qos.logback.classic.Logger)LoggerFactory.getLogger(PFRHttp.class.getName());
@@ -95,6 +98,7 @@ public class PFRHttp {
 	public enum PFRHttpSection{
 		  HEADER
 		, BODY
+		, STATUS
 	}
 
 	/******************************************************************************************************

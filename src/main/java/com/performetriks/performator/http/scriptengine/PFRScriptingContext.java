@@ -2,6 +2,7 @@ package com.performetriks.performator.http.scriptengine;
 
 import java.lang.reflect.Method;
 
+
 import org.graalvm.polyglot.Context;
 import org.graalvm.polyglot.Source;
 import org.graalvm.polyglot.Value;
@@ -10,7 +11,14 @@ import org.slf4j.LoggerFactory;
 import com.performetriks.performator.base.PFR;
 
 import ch.qos.logback.classic.Logger;
-
+/***************************************************************************
+ * 
+ * Copyright Owner: Performetriks GmbH, Switzerland
+ * License: Eclipse Public License v2.0
+ * 
+ * @author Reto Scheiwiller
+ * 
+ ***************************************************************************/
 public class PFRScriptingContext {
 	
 	private Context polyglot = null;
