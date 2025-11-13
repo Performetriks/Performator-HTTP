@@ -1,18 +1,16 @@
 package com.performetriks.performator.http;
 
-import com.performetriks.performator.http.PFRHttp.Response;
-
 public class ResponseFailedException extends Throwable {
 
 	private static final long serialVersionUID = 1L;
 	
-	private Response response;
+	private PFRHttpResponse response;
 	
-	public ResponseFailedException(Response r) {
+	public ResponseFailedException(PFRHttpResponse r) {
 		response = r;
 	}
 	
-	public Response getResponse() {
+	public PFRHttpResponse getResponse() {
 		return response;
 	}
 }
