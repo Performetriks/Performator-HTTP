@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.net.URL;
 
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
+import org.apache.hc.client5.http.cookie.Cookie;
+import org.apache.hc.client5.http.cookie.CookieStore;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
@@ -156,25 +158,37 @@ public class PFRHttpResponse {
 		String paramsString = (request.params == null) ? "null" : Joiner.on("&").withKeyValueSeparator("=").join(request.params);
 		String headersString = (request.headers == null) ? "null" : Joiner.on(",").withKeyValueSeparator("=").join(request.headers);
 		
+		CookieStore cookies = PFRHttp.cookieStore.get();
+		
+		StringBuilder sb = new StringBuilder();
+		for (Cookie c : cookies.getCookies()) {
+		    if (sb.length() > 0) sb.append("; ");
+		    sb.append(c.getName()).append("=").append(c.getValue());
+		}
+		String cookieHeader = sb.toString();
+		
+		String p = "\n# ";
 		StringBuilder builder = new StringBuilder();
-		builder.append("\n====================================== Debug Log ======================================");
-		builder.append("\nMetric Name: "+request.metricName);
-		builder.append("\n---------------- REQUEST ----------------");
-		builder.append("\nURL:         "+request.URL);
-		builder.append("\nMethod:      "+request.method);
-		builder.append("\nParams:      "+paramsString);
-		builder.append("\nHeaders:     "+headersString);
-		builder.append("\nBody:\n"+request.requestBody);
-		builder.append("\n---------------- RESPONSE ----------------");
-		builder.append("\nStatus:     "+this.getStatus());
-		builder.append("\nChecks OK:  "+this.checksSuccessful());
-		builder.append("\nHas Error:  "+this.hasError());
-		builder.append("\nError:      "+this.errorMessage());
-		builder.append("\nDuration:   "+this.getDuration());
-		builder.append("\nHeaders:    "+this.getHeadersAsJson().toString());
-		builder.append("\nBody:\n"+this.body);
+		builder.append("\n\n#################################### Debug Log ####################################");
+		builder.append(p+"Metric Name: "+request.metricName);
+		builder.append(p+"Thread Name: ["+Thread.currentThread().getName()+"]");
+		builder.append(p+"---------------- REQUEST ----------------");
+		builder.append(p+"URL:         "+request.URL);
+		builder.append(p+"Method:      "+request.method);
+		builder.append(p+"Params:      "+paramsString);
+		builder.append(p+"Headers:     "+headersString);
+		builder.append(p+"Cookies:     "+cookieHeader);
+		builder.append(p+"Body:\n"+( (request.requestBody == null) ? "" : p + request.requestBody.replace("\n", p)) );
+		builder.append(p+"---------------- RESPONSE ----------------");
+		builder.append(p+"Status:     "+this.getStatus());
+		builder.append(p+"Checks OK:  "+this.checksSuccessful());
+		builder.append(p+"Has Error:  "+this.hasError());
+		builder.append(p+"Error:      "+this.errorMessage());
+		builder.append(p+"Duration:   "+this.getDuration());
+		builder.append(p+"Headers:    "+this.getHeadersAsJson().toString());
+		builder.append(p+"Body:"+ ( (body == null) ? "" : p + body.replace("\n", p)) );
+		builder.append("\n###################################################################################\n");
 
-		builder.append("\n========================================================================================");
 		
 		PFRHttp.logger.error(builder.toString());
 	}

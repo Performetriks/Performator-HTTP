@@ -40,13 +40,11 @@ import org.apache.hc.core5.ssl.TrustStrategy;
 import org.graalvm.polyglot.Value;
 import org.slf4j.LoggerFactory;
 
-import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
 import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
 
-import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 
 /**************************************************************************************************************
