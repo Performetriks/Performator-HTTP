@@ -91,7 +91,7 @@ public class PFRHttpResponse {
 			
 			//--------------------------
 			// Start Measurement
-			if(metric != null) { HSR.start(metric); }
+			if(metric != null) { HSR.start(metric, request.sla); }
 			
 				//--------------------------
 				// Execute Request

@@ -39,6 +39,7 @@ import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 
 import com.performetriks.performator.http.PFRHttp.PFRHttpAuthMethod;
+import com.xresch.hsr.stats.HSRSLA;
 import com.xresch.hsr.utils.HSRText.CheckType;
 import com.xresch.hsr.utils.HSRTime.HSRTimeUnit;
 
@@ -68,6 +69,7 @@ public class PFRHttpRequestBuilder {
 	private boolean autoCloseClient = true;
 	long responseTimeoutMillis = HSRTimeUnit.m.toMillis(10); //default timeout of  10 minutes
 
+	HSRSLA sla = null;
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
 	
 	HashMap<String, String> params = new HashMap<>();
@@ -148,6 +150,14 @@ public class PFRHttpRequestBuilder {
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder allowHTTPErrors() {
 		this.autoFailOnHTTPErrors = false;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set an SLA for this request.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder sla(HSRSLA sla) {
+		this.sla = sla;
 		return this;
 	}
 	
