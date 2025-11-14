@@ -265,7 +265,7 @@ public class PFRHttp {
 				//------------------------------
 				// Cache PAC Contents
 				if(response != null && response.getStatus() <= 299) {
-					proxyPAC = response.getResponseBody();
+					proxyPAC = response.getBody();
 					
 					if(proxyPAC == null || !proxyPAC.contains("FindProxyForURL")) {
 						logger.error("The Proxy .pac-File seems not be in the expected format.");

@@ -293,7 +293,7 @@ public class PFRHttpResponse {
 	 * Get the body content of the response.
 	 * @return String or null on error
 	 ******************************************************************************************************/
-	public String getResponseBody() {
+	public String getBody() {
 		return body;
 	}
 	
@@ -302,7 +302,7 @@ public class PFRHttpResponse {
 	 * @param url used for the request.
 	 * @return JsonObject or null in case of issues
 	 ******************************************************************************************************/
-	public JsonElement getResponseBodyAsJsonElement(){
+	public JsonElement getBodyAsJsonElement(){
 		
 		//----------------------------------
 		// Check Body
@@ -336,7 +336,7 @@ public class PFRHttpResponse {
 	 * @param url used for the request.
 	 * @return JsonObject or null in case of issues
 	 ******************************************************************************************************/
-	public JsonObject getResponseBodyAsJsonObject(){
+	public JsonObject getBodyAsJsonObject(){
 		
 		//----------------------------------
 		// Check Body
@@ -369,7 +369,7 @@ public class PFRHttpResponse {
 	 * @param url used for the request.
 	 * @return JsonArray never null, empty array on error
 	 ******************************************************************************************************/
-	public JsonArray getResponseBodyAsJsonArray(){
+	public JsonArray getBodyAsJsonArray(){
 		
 		//----------------------------------
 		// Check Body
