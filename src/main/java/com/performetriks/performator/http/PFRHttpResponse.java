@@ -1,7 +1,9 @@
 package com.performetriks.performator.http;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.cookie.Cookie;
@@ -26,6 +28,7 @@ import com.performetriks.performator.base.PFRContext;
 import com.xresch.hsr.base.HSR;
 import com.xresch.hsr.stats.HSRRecord;
 import com.xresch.hsr.stats.HSRRecord.HSRRecordStatus;
+import com.xresch.hsr.utils.ByteSize;
 
 import ch.qos.logback.classic.Logger;
 
@@ -102,7 +105,7 @@ public class PFRHttpResponse {
 						if(response != null) {
 							status = response.getCode();
 							headers = response.getHeaders();
-							
+
 							HttpEntity entity = response.getEntity();
 							if(entity != null) {
 								body = EntityUtils.toString(response.getEntity());
@@ -120,6 +123,13 @@ public class PFRHttpResponse {
 							.code(""+status)
 							; 
 				
+				//--------------------------
+				// Measure Size
+				if(request.measuredSize != null) {
+					BigDecimal bodySize = getBodySize(request.measuredSize);
+					String suffix = "-Size" + ( (request.measuredSize != ByteSize.B) ? request.measuredSize.toString() : "Bytes" );
+					HSR.addGauge(metric+suffix, bodySize);
+				}
 			}
 			
 			//--------------------------
@@ -295,6 +305,20 @@ public class PFRHttpResponse {
 	 ******************************************************************************************************/
 	public String getBody() {
 		return body;
+	}
+	
+	/******************************************************************************************************
+	 * Get the response size of the response body in UTF-8 encoding.
+	 * @return byteSize the byte size the result should represent 
+	 ******************************************************************************************************/
+	public BigDecimal getBodySize(ByteSize byteSize) {
+		
+		if(body == null) { return BigDecimal.ZERO; }
+
+		long contentLength = body.getBytes(StandardCharsets.UTF_8).length;
+		BigDecimal converted = byteSize.convert(contentLength, 1);
+		
+		return converted;
 	}
 	
 	/******************************************************************************************************

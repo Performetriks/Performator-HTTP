@@ -40,6 +40,7 @@ import org.ietf.jgss.Oid;
 
 import com.performetriks.performator.http.PFRHttp.PFRHttpAuthMethod;
 import com.xresch.hsr.stats.HSRSLA;
+import com.xresch.hsr.utils.ByteSize;
 import com.xresch.hsr.utils.HSRText.CheckType;
 import com.xresch.hsr.utils.HSRTime.HSRTimeUnit;
 
@@ -59,6 +60,7 @@ public class PFRHttpRequestBuilder {
 	private char[] pwdArray = null;
 	
 	boolean autoFailOnHTTPErrors = true;
+	ByteSize measuredSize = null;
 	
 	String metricName = null;
 	String method = "GET";
@@ -129,8 +131,6 @@ public class PFRHttpRequestBuilder {
 		return this;
 	}
 	
-
-
 	
 	/***************************************************************************
 	 * Adds a map of headers
@@ -150,6 +150,17 @@ public class PFRHttpRequestBuilder {
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder allowHTTPErrors() {
 		this.autoFailOnHTTPErrors = false;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Toggles the measurement of response size after unzipping.
+	 * This will measure the actual size of the received content in UTF8 encoding. 
+	 * 
+	 * @param size that should be reported
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder measureSize(ByteSize size) {
+		this.measuredSize = size;
 		return this;
 	}
 	
