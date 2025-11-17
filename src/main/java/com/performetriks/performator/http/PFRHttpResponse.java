@@ -318,7 +318,7 @@ public class PFRHttpResponse {
 		if(body == null) { return BigDecimal.ZERO; }
 
 		long contentLength = body.getBytes(StandardCharsets.UTF_8).length;
-		BigDecimal converted = byteSize.convert(contentLength, 1);
+		BigDecimal converted = byteSize.convertBytes(contentLength, 1);
 		
 		return converted;
 	}
