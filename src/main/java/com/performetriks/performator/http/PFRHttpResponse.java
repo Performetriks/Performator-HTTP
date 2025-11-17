@@ -145,7 +145,7 @@ public class PFRHttpResponse {
 			}
 				
 			
-		} catch (IOException e) {
+		} catch (Throwable e) {
 			
 			if(metric != null) { 
 				record = HSR.end(false)
@@ -155,6 +155,8 @@ public class PFRHttpResponse {
 			hasError = true;
 			errorMessage = e.getMessage();
 			responseLogger.warn("Exception during HTTP request:"+e.getMessage(), e);
+			HSR.addErrorMessage(errorMessage);
+			HSR.addException(e);
 			
 		}finally {
 			
@@ -461,12 +463,15 @@ public class PFRHttpResponse {
 	 ******************************************************************************************************/
 	public JsonObject getHeadersAsJson() {
 		
-		if(headersAsJsonCached == null) {
+		if(headersAsJsonCached == null ) {
 			JsonObject object = new JsonObject();
-			for(Header entry : headers) {
-				
-				if(entry.getName() != null) {
-					object.addProperty(entry.getName(), entry.getValue());
+			
+			if(headers != null) {
+				for(Header entry : headers) {
+					
+					if(entry.getName() != null) {
+						object.addProperty(entry.getName(), entry.getValue());
+					}
 				}
 			}
 			

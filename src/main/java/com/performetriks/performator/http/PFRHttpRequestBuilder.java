@@ -69,7 +69,7 @@ public class PFRHttpRequestBuilder {
 	
 	String requestBodyContentType = "plain/text; charset=UTF-8";
 	private boolean autoCloseClient = true;
-	long responseTimeoutMillis = HSRTimeUnit.m.toMillis(10); //default timeout of  10 minutes
+	long responseTimeoutMillis = PFRHttp.defaultResponseTimeout(); //default timeout of  10 minutes
 
 	HSRSLA sla = null;
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
