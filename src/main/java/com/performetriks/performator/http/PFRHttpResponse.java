@@ -175,7 +175,7 @@ public class PFRHttpResponse {
 	}
 	
 	/******************************************************************************************************
-	 * 
+	 * Prints debug information with level INFO.
 	 ******************************************************************************************************/
 	public void printDebugLog() {
 		
@@ -219,8 +219,7 @@ public class PFRHttpResponse {
 		builder.append("\n##################");
 		builder.append("\n########\n");
 
-		
-		PFRHttp.logger.error(builder.toString());
+		PFRHttp.logger.info(builder.toString());
 	}
 	/******************************************************************************************************
 	 * 
