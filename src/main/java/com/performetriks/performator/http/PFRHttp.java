@@ -650,7 +650,7 @@ public class PFRHttp {
 	    	//-------------------------------------
 	    	// Load Keystore
 			try (FileInputStream keyStoreStream = new FileInputStream(path)) { 
-				KeyStore cachedKeyStore = KeyStore.getInstance(keystoreType); // or "PKCS12"
+				cachedKeyStore = KeyStore.getInstance(keystoreType); // or "PKCS12"
 				cachedKeyStore.load(keyStoreStream, password.toCharArray());
 			    
 			}catch (Exception e) {
