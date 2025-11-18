@@ -49,7 +49,6 @@ public class PFRHttpResponse {
 	private URL url;
 	String body;
 	private int status = -1;
-	private long duration = -1;
 	
 	private Header[] headers;
 	private JsonObject headersAsJsonCached;
@@ -89,7 +88,6 @@ public class PFRHttpResponse {
 		
 		//----------------------------------
 		// Send Request and Read Response
-		long startMillis = System.currentTimeMillis();
 		try {
 			
 			//--------------------------
@@ -122,7 +120,7 @@ public class PFRHttpResponse {
 				record = HSR.end(isSuccess())
 							.code(""+status)
 							; 
-				
+
 				//--------------------------
 				// Measure Size
 				if(request.measuredSize != null) {
@@ -151,7 +149,7 @@ public class PFRHttpResponse {
 				record = HSR.end(false)
 							.code(""+status);
 			}
-			
+
 			hasError = true;
 			errorMessage = e.getMessage();
 			responseLogger.warn("Exception during HTTP request:"+e.getMessage(), e);
@@ -164,10 +162,7 @@ public class PFRHttpResponse {
 			|| PFRHttp.debugLogFail.get() && !this.isSuccess()) {
 				printDebugLog();
 			}
-				
-			long endMillis = System.currentTimeMillis();
-			duration = endMillis - startMillis;
-			
+							
 			if(autoCloseClient) {
 				close();
 			}
@@ -201,6 +196,7 @@ public class PFRHttpResponse {
 		builder.append(p+"Metric Name: "+request.metricName);
 		builder.append(p+"Thread Name: ["+Thread.currentThread().getName()+"]");
 		builder.append(p+"Log Details: "+PFRContext.logDetailsString().trim() );
+		builder.append(p+"Duration:    "+getDuration()+" ms");
 		builder.append(p+"---------------- REQUEST ----------------");
 		builder.append(p+"URL:         "+request.URL);
 		builder.append(p+"Method:      "+request.method);
@@ -221,6 +217,8 @@ public class PFRHttpResponse {
 
 		PFRHttp.logger.info(builder.toString());
 	}
+	
+	
 	/******************************************************************************************************
 	 * 
 	 ******************************************************************************************************/
@@ -447,7 +445,12 @@ public class PFRHttpResponse {
 	 * Returns the approximate duration that was needed for executing and reading the request.
 	 ******************************************************************************************************/
 	public long getDuration() {
-		return duration;
+		
+		if(record != null) {
+			return record.value().longValue();
+		}
+		
+		return -1;
 	}
 	
 	/******************************************************************************************************
