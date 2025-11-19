@@ -145,16 +145,16 @@ public class PFRHttpResponse {
 			
 		} catch (Throwable e) {
 			
+			hasError = true;
+			
+			errorMessage = "Exception during HTTP request: "+e.getMessage();
+			responseLogger.warn(errorMessage, e);
+			
 			if(metric != null) { 
 				record = HSR.end(false)
 							.code(""+status);
 			}
 
-			hasError = true;
-			errorMessage = e.getMessage();
-			responseLogger.warn("Exception during HTTP request:"+e.getMessage(), e);
-			HSR.addErrorMessage(errorMessage);
-			HSR.addException(e);
 			
 		}finally {
 			
