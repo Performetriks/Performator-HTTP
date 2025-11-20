@@ -307,6 +307,17 @@ public class PFRHttpResponse {
 	}
 	
 	/******************************************************************************************************
+	 * Get the response size of the response body as bytes in UTF-8 encoding.
+	 * @return size in bytes
+	 ******************************************************************************************************/
+	public long getBodySize() {
+		
+		if(body == null) { return 0L; }
+		
+		return body.getBytes(StandardCharsets.UTF_8).length;
+	}
+		
+	/******************************************************************************************************
 	 * Get the response size of the response body in UTF-8 encoding.
 	 * @return byteSize the byte size the result should represent 
 	 ******************************************************************************************************/
@@ -314,7 +325,7 @@ public class PFRHttpResponse {
 		
 		if(body == null) { return BigDecimal.ZERO; }
 
-		long contentLength = body.getBytes(StandardCharsets.UTF_8).length;
+		long contentLength = getBodySize();
 		BigDecimal converted = byteSize.convertBytes(contentLength, 1);
 		
 		return converted;

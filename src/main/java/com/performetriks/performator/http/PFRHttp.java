@@ -60,7 +60,9 @@ public class PFRHttp {
 	
 	static Logger logger = (ch.qos.logback.classic.Logger)LoggerFactory.getLogger(PFRHttp.class.getName());
 	
-	private static long defaultResponseTimeoutMillis = HSRTimeUnit.m.toMillis(3); //default timeout of  3 minutes
+	private static ThreadLocal<Long> defaultResponseTimeoutMillis = 
+			InheritableThreadLocal.withInitial(() -> HSRTimeUnit.m.toMillis(3) ); 
+			//default timeout of  3 minutes
 
 	//Use Threadlocal to avoid polyglot multi thread exceptions
 	private static ThreadLocal<PFRScriptingContext> javascriptEngine = new ThreadLocal<PFRScriptingContext>();
@@ -123,14 +125,14 @@ public class PFRHttp {
 	 * Set the default response timeout used for all the requests.
 	 ******************************************************************************************************/
 	public static void defaultResponseTimeout(long millis) {
-		defaultResponseTimeoutMillis = millis;
+		defaultResponseTimeoutMillis.set(millis);
 	}
 	
 	/******************************************************************************************************
 	 * Returns the default response timeout.
 	 ******************************************************************************************************/
 	public static long defaultResponseTimeout() {
-		return defaultResponseTimeoutMillis;
+		return defaultResponseTimeoutMillis.get();
 	}
 	
 	/******************************************************************************************************

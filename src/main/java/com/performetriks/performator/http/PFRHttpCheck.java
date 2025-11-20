@@ -15,14 +15,32 @@ import com.xresch.hsr.utils.HSRText.CheckType;
  ***************************************************************************/
 public class PFRHttpCheck {
 	
-	private CheckType checkType;
+	private CheckType checkType = null;
 	private PFRHttpSection section = PFRHttpSection.BODY;
+	private PFRHttpCheckCustom customCheck = null;
+	
 	private String messageOnFail = null;
 	
 	private String valueToCheck = null;
 	
 	private String headerName = null;
 	private boolean appendLogDetails = true;
+	
+	/***********************************************
+	 * Interface for custom checks
+	 ***********************************************/
+	public interface PFRHttpCheckCustom {
+		public boolean check(PFRHttpCheck check, PFRHttpResponse r);
+	}
+	
+	/***********************************************
+	 * 
+	 ***********************************************/
+	public PFRHttpCheck(PFRHttpCheckCustom customCheck) {
+		this.checkType = null;
+		this.customCheck = customCheck;
+		this.messageOnFail = "Custom Check Failed";
+	}
 	
 	/***********************************************
 	 * 
@@ -89,6 +107,10 @@ public class PFRHttpCheck {
 		|| r.hasError
 		){ return false; }
 		
+		if(customCheck != null) {
+			return checkCustom(r);
+		}
+		
 		switch (section) {
 			case BODY: 		return checkBody(r);
 			case HEADER:	return checkHeader(r);
@@ -97,7 +119,17 @@ public class PFRHttpCheck {
 		}
 
 	}
-	
+	/***********************************************
+	 * 
+	 ***********************************************/
+	private boolean checkCustom(PFRHttpResponse r) {
+		
+		boolean success = customCheck.check(this, r);
+		
+		if(!success) { logMessage(r); }
+		
+		return success;
+	}
 	/***********************************************
 	 * 
 	 ***********************************************/
@@ -148,8 +180,6 @@ public class PFRHttpCheck {
 		}
 		
 		r.responseLogger.error(finalMessage);
-		
-		HSR.addErrorMessage(finalMessage).parent(r.record);
 		
 	}
 	

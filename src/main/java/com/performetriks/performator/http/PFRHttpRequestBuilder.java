@@ -251,8 +251,9 @@ public class PFRHttpRequestBuilder {
 	 * @param check the check to be added
 	 * @return instance of chaining
 	 ***************************************************************************/
-	public void check(PFRHttpCheck check) {
+	public PFRHttpRequestBuilder check(PFRHttpCheck check) {
 		checksList.add(check);
+		return this;
 	}
 	
 	/***************************************************************************
