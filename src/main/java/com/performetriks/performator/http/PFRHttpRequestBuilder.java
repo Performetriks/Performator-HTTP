@@ -28,6 +28,7 @@ import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.protocol.RedirectStrategy;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
@@ -60,6 +61,7 @@ public class PFRHttpRequestBuilder {
 	private char[] pwdArray = null;
 	
 	boolean autoFailOnHTTPErrors = true;
+	boolean disableFollowRedirects = false;
 	ByteSize measuredSize = null;
 	
 	String metricName = null;
@@ -147,9 +149,20 @@ public class PFRHttpRequestBuilder {
 	/***************************************************************************
 	 * Toggles the checks to allow HTTP statuses >= 400 without failing 
 	 * automatically.
+	 * @return instance for chaining
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder allowHTTPErrors() {
 		this.autoFailOnHTTPErrors = false;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Disables the automatic following of HTTP Redirects.
+	 * Might be useful in certain cases.
+	 * @return instance for chaining.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder disableFollowRedirects() {
+		this.disableFollowRedirects = true;
 		return this;
 	}
 	
@@ -725,6 +738,7 @@ public class PFRHttpRequestBuilder {
 				
 				HttpClientBuilder clientBuilder = HttpClientBuilder.create();
 				clientBuilder.setDefaultCookieStore(PFRHttp.cookieStore.get());
+				
 				clientBuilder.setDefaultRequestConfig(
 							 RequestConfig
 									.custom()
@@ -734,6 +748,12 @@ public class PFRHttpRequestBuilder {
 				PFRHttp.httpClientAddProxy(clientBuilder, URL);
 				PFRHttp.setSSLContext(clientBuilder);
 
+				//----------------------------------
+				// Create HTTP Client
+				if(disableFollowRedirects) {
+					clientBuilder.disableRedirectHandling();
+				}
+				
 			    //----------------------------------
 				// Set Auth mechanism
 				if(username != null) {

@@ -158,8 +158,9 @@ public class PFRHttpResponse {
 			
 		}finally {
 			
-			if(PFRHttp.debugLogAll.get()
-			|| PFRHttp.debugLogFail.get() && !this.isSuccess()) {
+			if( PFRHttp.debugLogAll.get()
+			|| (PFRHttp.debugLogFail.get() && !this.isSuccess())
+			){
 				printDebugLog();
 			}
 							

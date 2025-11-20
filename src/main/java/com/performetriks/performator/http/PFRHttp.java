@@ -59,10 +59,7 @@ import ch.qos.logback.classic.Logger;
 public class PFRHttp {
 	
 	static Logger logger = (ch.qos.logback.classic.Logger)LoggerFactory.getLogger(PFRHttp.class.getName());
-	
-	private static ThreadLocal<Long> defaultResponseTimeoutMillis = 
-			InheritableThreadLocal.withInitial(() -> HSRTimeUnit.m.toMillis(3) ); 
-			//default timeout of  3 minutes
+				
 
 	//Use Threadlocal to avoid polyglot multi thread exceptions
 	private static ThreadLocal<PFRScriptingContext> javascriptEngine = new ThreadLocal<PFRScriptingContext>();
@@ -81,10 +78,35 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> keystorePW = new InheritableThreadLocal<>();
 	private static InheritableThreadLocal<String> keystoreManagerPW = new InheritableThreadLocal<>();
 	
-	static ThreadLocal<BasicCookieStore> cookieStore = InheritableThreadLocal.withInitial(() -> new BasicCookieStore());
-	  
-	static ThreadLocal<Boolean> debugLogAll = InheritableThreadLocal.withInitial(() -> Boolean.FALSE);
-	static ThreadLocal<Boolean> debugLogFail = InheritableThreadLocal.withInitial(() -> Boolean.FALSE);
+	
+	private static InheritableThreadLocal<Long> defaultResponseTimeoutMillis =  new InheritableThreadLocal<>() { 
+		@Override
+	    protected Long initialValue() {
+			//default timeout of  3 minutes
+	        return HSRTimeUnit.m.toMillis(3);
+	    }
+	};
+	
+	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
+		@Override
+	    protected BasicCookieStore initialValue() {
+	        return new BasicCookieStore();
+	    }
+	};
+			
+	static InheritableThreadLocal<Boolean> debugLogAll = new InheritableThreadLocal<>() { 
+		@Override
+	    protected Boolean initialValue() {
+	        return false;
+	    }
+	};
+	
+	static InheritableThreadLocal<Boolean> debugLogFail = new InheritableThreadLocal<>() { 
+		@Override
+	    protected Boolean initialValue() {
+	        return false;
+	    }
+	};;
 		
 	
 	public enum PFRHttpAuthMethod{
