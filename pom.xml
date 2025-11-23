@@ -18,7 +18,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<otel.version>1.49.0</otel.version>
 		
-		<skipJavadoc>true</skipJavadoc>
+		<skipJavadoc>false</skipJavadoc>
 		
 	</properties>
 	
@@ -195,6 +195,27 @@
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+			
+			<!-- ================= JAVADOC ================== -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-javadoc-plugin</artifactId>
+				<version>3.5.0</version>
+				<executions>
+					<execution>
+						<id>attach-javadocs</id>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<skip>${skipJavadoc}</skip>
+					<additionalparam>-Xdoclint:none</additionalparam>
+					<additionalOptions>-Xdoclint:none</additionalOptions>
+					<additionalJOption>-Xdoclint:none</additionalJOption>
+				</configuration>
 			</plugin>
 
 			
