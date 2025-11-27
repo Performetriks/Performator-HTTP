@@ -87,6 +87,20 @@ public class PFRHttp {
 	    }
 	};
 	
+	static InheritableThreadLocal<Long> defaultPauseMillisLower = new InheritableThreadLocal<>() { 
+		@Override
+	    protected Long initialValue() {
+	        return 0L;
+	    }
+	};
+	
+	static InheritableThreadLocal<Long> defaultPauseMillisUpper = new InheritableThreadLocal<>() { 
+		@Override
+	    protected Long initialValue() {
+	        return 0L;
+	    }
+	};
+	
 	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
 		@Override
 	    protected BasicCookieStore initialValue() {
@@ -106,7 +120,8 @@ public class PFRHttp {
 	    protected Boolean initialValue() {
 	        return false;
 	    }
-	};;
+	};
+	
 		
 	
 	public enum PFRHttpAuthMethod{
@@ -144,17 +159,47 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
-	 * Set the default response timeout used for all the requests.
+	 * Set the default response timeout used for all the requests of the current user(thread).
 	 ******************************************************************************************************/
 	public static void defaultResponseTimeout(long millis) {
 		defaultResponseTimeoutMillis.set(millis);
 	}
 	
 	/******************************************************************************************************
-	 * Returns the default response timeout.
+	 * Returns the default response timeout for all the requests of the current user(thread).
 	 ******************************************************************************************************/
 	public static long defaultResponseTimeout() {
 		return defaultResponseTimeoutMillis.get();
+	}
+	
+	/******************************************************************************************************
+	 * Set the default pause used for all the requests of the current user(thread).
+	 ******************************************************************************************************/
+	public static void defaultPause(long millis) {
+		defaultPauseMillisLower.set(millis);
+		defaultPauseMillisUpper.set(millis);
+	}
+	
+	/******************************************************************************************************
+	 * Set the default pause used for all the requests of the current user(thread).
+	 ******************************************************************************************************/
+	public static void defaultPause(long lowerMillis, long upperMillis) {
+		defaultPauseMillisLower.set(lowerMillis);
+		defaultPauseMillisUpper.set(upperMillis);
+	}
+	
+	/******************************************************************************************************
+	 * Returns the default pause lower range.
+	 ******************************************************************************************************/
+	public static long defaultPauseLower() {
+		return defaultPauseMillisLower.get();
+	}
+	
+	/******************************************************************************************************
+	 * Returns the default pause upper range.
+	 ******************************************************************************************************/
+	public static long defaultPauseUpper() {
+		return defaultPauseMillisUpper.get();
 	}
 	
 	/******************************************************************************************************

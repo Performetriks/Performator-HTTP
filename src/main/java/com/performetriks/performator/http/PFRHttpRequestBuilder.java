@@ -71,8 +71,11 @@ public class PFRHttpRequestBuilder {
 	
 	String requestBodyContentType = "plain/text; charset=UTF-8";
 	private boolean autoCloseClient = true;
-	long responseTimeoutMillis = PFRHttp.defaultResponseTimeout(); //default timeout of  10 minutes
-
+	
+	long responseTimeoutMillis = PFRHttp.defaultResponseTimeout(); 
+	long pauseMillisLower = PFRHttp.defaultPauseLower(); 
+	long pauseMillisUpper = PFRHttp.defaultPauseUpper(); 
+	
 	HSRSLA sla = null;
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
 	
@@ -249,6 +252,31 @@ public class PFRHttpRequestBuilder {
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder timeout(long responseTimeoutMillis) {
 		this.responseTimeoutMillis = responseTimeoutMillis;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Add a pause after the response was received.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder pause(long pauseMillis) {
+		this.pauseMillisLower = pauseMillis;
+		this.pauseMillisUpper = pauseMillis;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Add a random pause in milliseconds that lies in between the specified
+	 * range.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder pause(long lowerMillis, long upperMillis) {
+		
+		if(lowerMillis <= upperMillis) {
+			this.pauseMillisLower = lowerMillis;
+			this.pauseMillisUpper = upperMillis;
+		}else {
+			this.pauseMillisLower = upperMillis;
+			this.pauseMillisUpper = lowerMillis;
+		}
 		return this;
 	}
 	
