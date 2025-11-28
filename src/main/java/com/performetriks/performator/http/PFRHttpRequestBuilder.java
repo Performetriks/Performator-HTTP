@@ -1,5 +1,6 @@
 package com.performetriks.performator.http;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -41,6 +42,8 @@ import org.ietf.jgss.Oid;
 
 import com.performetriks.performator.http.PFRHttp.PFRHttpAuthMethod;
 import com.xresch.hsr.stats.HSRSLA;
+import com.xresch.hsr.stats.HSRExpression.Operator;
+import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
 import com.xresch.hsr.utils.ByteSize;
 import com.xresch.hsr.utils.HSRText.CheckType;
 import com.xresch.hsr.utils.HSRTime.HSRTimeUnit;
@@ -205,10 +208,34 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
-	 * Set an SLA for this request.
+	 * Set an SLA for this request. You can only set one SLA per request.
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder sla(HSRSLA sla) {
 		this.sla = sla;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set an SLA for this request. You can only set one SLA per request.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder sla(HSRMetric metric, Operator operator, int value) {
+		this.sla = new HSRSLA(metric, operator, value);
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set an SLA for this request. You can only set one SLA per request.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder sla(HSRMetric metric, Operator operator, Number value) {
+		this.sla = new HSRSLA(metric, operator, value);
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set an SLA for this request. You can only set one SLA per request.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder sla(HSRMetric metric, Operator operator, BigDecimal value) {
+		this.sla = new HSRSLA(metric, operator, value);
 		return this;
 	}
 	
@@ -305,7 +332,9 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
-	 * Add a request Body in JSON format UTF-8 encoding
+	 * Builds the url with parameters for this request builder and returns
+	 * it as a string.
+	 * Useful for debugging.
 	 ***************************************************************************/
 	public String buildURLwithParams() {
 		return  PFRHttp.buildURL(URL, params);
