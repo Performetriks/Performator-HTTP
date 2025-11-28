@@ -92,7 +92,7 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
-	 * Set method to GET
+	 * Set request method to GET
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder GET() {
 		method = "GET";
@@ -100,10 +100,34 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
-	 * Set method to POST
+	 * Set request method to POST
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder POST() {
 		method = "POST";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to PUT
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder PUT() {
+		method = "PUT";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to DELETE
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder DELETE() {
+		method = "DELETE";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to a customized method.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder METHOD(String method) {
+		this.method = method;
 		return this;
 	}
 	
