@@ -165,13 +165,16 @@ public class PFRHttpConvertHar extends JFrame {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-
+		
+		Color reallyDark = new Color(20, 20, 20);
+		Color reallyLight = new Color(230, 230, 230);
+		
         // tweak some UIManager colors
-        UIManager.put("control", new Color(50, 50, 50));
+        UIManager.put("control", reallyDark);
         UIManager.put("info", new Color(60, 60, 60));
-        UIManager.put("nimbusBase", new Color(20, 20, 30));
+        UIManager.put("nimbusBase", reallyDark);
         UIManager.put("nimbusAlertYellow", new Color(248, 187, 0));
-        UIManager.put("nimbusDisabledText", new Color(128, 128, 128));
+        UIManager.put("nimbusDisabledText", new Color(180, 180, 180));
         UIManager.put("nimbusFocus", new Color(115, 164, 209));
         UIManager.put("nimbusGreen", new Color(176, 179, 50));
         UIManager.put("nimbusInfoBlue", new Color(66, 139, 221));
@@ -180,8 +183,7 @@ public class PFRHttpConvertHar extends JFrame {
         UIManager.put("nimbusRed", new Color(169, 46, 34));
         UIManager.put("nimbusSelectedText", Color.WHITE);
         UIManager.put("nimbusSelectionBackground", new Color(75, 110, 175));
-        UIManager.put("text", Color.WHITE);
-        
+       
         
 		// Create left panel with inputs
 		JPanel leftPanel = new JPanel();
@@ -304,6 +306,9 @@ public class PFRHttpConvertHar extends JFrame {
 		//------------------------------------
 		// Configure output area
 		outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+		outputArea.setBackground(reallyDark);    
+		outputArea.setForeground(reallyLight);   
+		outputArea.setCaretColor(reallyLight);   
 		//outputArea.setLineWrap(false);
 		//outputArea.setWrapStyleWord(false);
 		//outputArea.setTabSize(4);
