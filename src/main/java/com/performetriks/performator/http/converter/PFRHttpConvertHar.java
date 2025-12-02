@@ -84,8 +84,9 @@ public class PFRHttpConvertHar extends JFrame {
 	// UI Elements (left / right)
 	// ---------------------------
 	private final JTextPane outputArea = new JTextPane();
-	private final JButton btnChooseHar = new JButton("Choose HAR...");
-	private final JLabel lblHarPath = new JLabel("No file chosen");
+	private final JButton btnChooseHar = new JButton("Open HAR...");
+	private final JButton btnChoosePostman = new JButton("Open Postman...");
+	private final JLabel labelFilePath = new JLabel("No file chosen");
 
 	private final JCheckBox cbExcludeRedirects = new JCheckBox("Exclude Redirects", true);
 	private final JCheckBox cbExcludeCss = new JCheckBox("Exclude CSS", true);
@@ -194,7 +195,8 @@ public class PFRHttpConvertHar extends JFrame {
 		// Top: file chooser area
 		JPanel filePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		filePanel.add(btnChooseHar);
-		filePanel.add(lblHarPath);
+		filePanel.add(btnChoosePostman);
+		filePanel.add(labelFilePath);
 		leftPanel.add(filePanel, BorderLayout.NORTH);
 
 		//--------------------------------------
@@ -288,7 +290,7 @@ public class PFRHttpConvertHar extends JFrame {
 		//--------------------------------------
 		// Other general options
 		addLabeled(inputs, c, "Debug Log On Fail", cbDebugLogOnFail,
-				"If selected, PFRHttp.debugLogFail(true); will be emitted in initializeUser().", 15);
+				"If selected, PFRHttp.debugLogFail(true); will be emitted in initializeUser().", row++);
 
 		//--------------------------------------
 		// Numeric spinners
@@ -449,6 +451,7 @@ public class PFRHttpConvertHar extends JFrame {
 
 		// File chooser
 		btnChooseHar.addActionListener(e -> chooseHarFile());
+		btnChoosePostman.addActionListener(e -> choosePostmanFile());
 
 		// When user manually edits output, we don't need to regenerate; so no listener there.
 
@@ -473,15 +476,36 @@ public class PFRHttpConvertHar extends JFrame {
 	 *****************************************************************************/
 	private void chooseHarFile() {
 		JFileChooser chooser = new JFileChooser();
-		chooser.setFileFilter(new FileNameExtensionFilter("HAR files", "har"));
+		chooser.setFileFilter(new FileNameExtensionFilter("HTTP Archive (.har)", "har"));
 		int res = chooser.showOpenDialog(this);
 		if (res == JFileChooser.APPROVE_OPTION) {
 			File f = chooser.getSelectedFile();
-			lblHarPath.setText(f.getAbsolutePath());
+			labelFilePath.setText(f.getAbsolutePath());
 			try {
 				parseHarFile(f);
 			} catch (Exception ex) {
 				JOptionPane.showMessageDialog(this, "Failed to parse HAR: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+				requestModel = new RequestModel(); // reset model
+			}
+			regenerateCode();
+		}
+	}
+	
+	/*****************************************************************************
+	 * Handles HAR file selection and parsing.
+	 *****************************************************************************/
+	private void choosePostmanFile() {
+		JFileChooser chooser = new JFileChooser();
+		chooser.setFileFilter(new FileNameExtensionFilter("Postman Collection (.json)", "json"));
+		int res = chooser.showOpenDialog(this);
+		
+		if (res == JFileChooser.APPROVE_OPTION) {
+			File f = chooser.getSelectedFile();
+			labelFilePath.setText(f.getAbsolutePath());
+			try {
+				parsePostmanCollection(f);
+			} catch (Exception ex) {
+				JOptionPane.showMessageDialog(this, "Failed to parse Postman Collection: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
 				requestModel = new RequestModel(); // reset model
 			}
 			regenerateCode();
@@ -587,6 +611,183 @@ public class PFRHttpConvertHar extends JFrame {
 			requestModel = new RequestModel(entries);
 		}
 	}
+	
+	/*****************************************************************************
+	 * Parse a Postman Collection JSON file into an in-memory RequestModel.
+	 *
+	 * This loads JSON with GSON and extracts:
+	 * - request name
+	 * - request url
+	 * - request method
+	 * - headers
+	 * - body (raw if available)
+	 * - URL query parameters
+	 *
+	 * Postman collections are recursive: any object may contain an "item" array.
+	 *
+	 * @param file Postman Collection JSON to parse
+	 * @throws IOException on IO problems
+	 *****************************************************************************/
+	private void parsePostmanCollection(File file) throws IOException {
+
+	    RequestEntry.clearHostList();
+
+	    try (Reader r = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+	        JsonElement rootEl = JsonParser.parseReader(r);
+	        JsonObject root = rootEl.isJsonObject() ? rootEl.getAsJsonObject() : new JsonObject();
+
+	        List<RequestEntry> entries = new ArrayList<>();
+
+	        // top-level "item" array
+	        if (root.has("item") && root.get("item").isJsonArray()) {
+	            JsonArray arr = root.getAsJsonArray("item");
+	            parseItemArray(arr, entries);
+	        }
+
+	        requestModel = new RequestModel(entries);
+	    }
+	}
+	
+	/**
+	 * Recursively process any "item" array in a Postman collection.
+	 */
+	private void parseItemArray(JsonArray items, List<RequestEntry> entries) {
+
+	    for (JsonElement el : items) {
+	        if (!el.isJsonObject()) continue;
+	        JsonObject itemObj = el.getAsJsonObject();
+
+	        // If this object contains a request, parse it
+	        if (itemObj.has("request") && itemObj.get("request").isJsonObject()) {
+	            JsonObject req = itemObj.getAsJsonObject("request");
+
+	            RequestEntry hre = new RequestEntry();
+
+	            // -------------------------
+	            // Name
+	            hre.name = itemObj.has("name") ? itemObj.get("name").getAsString() : "";
+
+	            // -------------------------
+	            // Method
+	            hre.method = req.has("method") ? req.get("method").getAsString() : "GET";
+
+	            // -------------------------
+	            // URL
+	            String url = extractPostmanURL(req);
+	            hre.setURL(url);
+
+	            // -------------------------
+	            // Headers
+	            hre.headers = new LinkedHashMap<>();
+	            if (req.has("header") && req.get("header").isJsonArray()) {
+	                JsonArray hdrs = req.getAsJsonArray("header");
+	                for (JsonElement h : hdrs) {
+	                    if (!h.isJsonObject()) continue;
+	                    JsonObject ho = h.getAsJsonObject();
+	                    String name = ho.has("key") ? ho.get("key").getAsString() : "";
+	                    String value = ho.has("value") ? ho.get("value").getAsString() : "";
+	                    if (!name.isEmpty()) hre.headers.put(name, value);
+	                }
+	            }
+
+	            // -------------------------
+	            // Body
+	            if (req.has("body") && req.get("body").isJsonObject()) {
+	                JsonObject body = req.getAsJsonObject("body");
+
+	                // raw body
+	                if (body.has("raw")) {
+	                    hre.postData = body.get("raw").getAsString();
+	                }
+	            }
+
+	            // -------------------------
+	            // Query parameters attached to URL
+	            extractPostmanParamsToEntry(req, hre);
+
+	            entries.add(hre);
+	        }
+
+	        // -------------------------
+	        // Recurse deeper if nested "item" exists
+	        if (itemObj.has("item") && itemObj.get("item").isJsonArray()) {
+	            parseItemArray(itemObj.getAsJsonArray("item"), entries);
+	        }
+	    }
+	}
+
+	/*****************************************************************************
+	 *
+	 *****************************************************************************/
+	private String extractPostmanURL(JsonObject postmanItem) {
+
+	    if (!postmanItem.has("url")) return "";
+
+	    JsonElement uel = postmanItem.get("url");
+
+	    // "url" may be a string OR an object
+	    if (uel.isJsonPrimitive()) {
+	        return uel.getAsString();
+	    }
+
+	    JsonObject urlObj = uel.getAsJsonObject();
+
+	    StringBuilder sb = new StringBuilder();
+
+	    // protocol://
+	    if (urlObj.has("protocol"))
+	        sb.append(urlObj.get("protocol").getAsString()).append("://");
+
+	    // host segments
+	    if (urlObj.has("host") && urlObj.get("host").isJsonArray()) {
+	        JsonArray hostArr = urlObj.getAsJsonArray("host");
+	        for (int i = 0; i < hostArr.size(); i++) {
+	            if (i > 0) sb.append(".");
+	            sb.append(hostArr.get(i).getAsString());
+	        }
+	    }
+
+	    // path segments
+	    if (urlObj.has("path") && urlObj.get("path").isJsonArray()) {
+	        for (JsonElement p : urlObj.getAsJsonArray("path")) {
+	            sb.append("/").append(p.getAsString());
+	        }
+	    }
+
+	    // query parameters (append later)
+	    return sb.toString();
+	}
+
+	/*****************************************************************************
+	 *
+	 *****************************************************************************/
+	private void extractPostmanParamsToEntry(JsonObject postmanItem, RequestEntry req) {
+
+	    req.params = new LinkedHashMap<>();
+
+	    if (!postmanItem.has("url")) return;
+
+	    JsonElement uel = postmanItem.get("url");
+
+	    if (!uel.isJsonObject()) return;
+
+	    JsonObject urlObj = uel.getAsJsonObject();
+
+	    if (urlObj.has("query") && urlObj.get("query").isJsonArray()) {
+	        JsonArray qarr = urlObj.getAsJsonArray("query");
+	        for (JsonElement q : qarr) {
+	            if (!q.isJsonObject()) continue;
+
+	            JsonObject qo = q.getAsJsonObject();
+	            String key = qo.has("key") ? qo.get("key").getAsString() : null;
+	            String val = qo.has("value") ? qo.get("value").getAsString() : "";
+
+	            if (key != null) req.params.put(key, val);
+	        }
+	    }
+	}
+
+
 
 	/*****************************************************************************
 	 * Regenerate the code in the output textarea based on current inputs and the loaded HAR model.
@@ -1022,11 +1223,15 @@ public class PFRHttpConvertHar extends JFrame {
 	 * Represents a single request extracted from the HAR.
 	 *****************************************************************************/
 	private class RequestEntry {
+		
 		String method = "GET";
+		String name = "";
+		
 		String url = "";
 		String urlHost = "";
 		String urlQuery = "";
 		String urlVariable = "";
+		
 		LinkedHashMap<String, String> headers = new LinkedHashMap<>();
 		LinkedHashMap<String, String> params = new LinkedHashMap<>();
 		String postData = "";
@@ -1121,7 +1326,11 @@ public class PFRHttpConvertHar extends JFrame {
 			
 			//-------------------------------
 			// Remove slashes
-			String sanitized = urlQuery.substring(1); // Remove slash at the beginning
+			String sanitized = ( name != null && !name.isBlank() ) 
+									? name 
+									: urlQuery.substring(1) // Remove slash at the beginning
+									;
+			
 			if(sanitized.endsWith("/")) {
 				sanitized = sanitized.substring(0, sanitized.length()-1); // Remove slash at the end
 			}
