@@ -187,18 +187,20 @@ public class PFRHttpConvertHar extends JFrame {
         UIManager.put("nimbusSelectedText", Color.WHITE);
         UIManager.put("nimbusSelectionBackground", new Color(75, 110, 175));
        
-        
+        //--------------------------------------
 		// Create left panel with inputs
 		JPanel leftPanel = new JPanel();
 		leftPanel.setLayout(new BorderLayout());
 		leftPanel.setBorder(new EmptyBorder(10, 10, 10, 10));
 
+		//--------------------------------------
 		// Top: file chooser area
 		JPanel filePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
 		filePanel.add(btnChooseHar);
 		filePanel.add(lblHarPath);
 		leftPanel.add(filePanel, BorderLayout.NORTH);
 
+		//--------------------------------------
 		// Middle: inputs in a scroll pane
 		JPanel inputs = new JPanel();
 		inputs.setLayout(new GridBagLayout());
@@ -474,6 +476,7 @@ public class PFRHttpConvertHar extends JFrame {
 			} catch (Exception ex) {
 				JOptionPane.showMessageDialog(this, "Failed to parse HAR: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
 				requestModel = new RequestModel(); // reset model
+				RequestEntry.clearHostList();
 			}
 			regenerateCode();
 		}
@@ -558,7 +561,9 @@ public class PFRHttpConvertHar extends JFrame {
 						resourceType = entry.get("comment").getAsString();
 					}
 					hre.resourceType = resourceType;
+					
 					entries.add(hre);
+
 				}
 			}
 			requestModel = new RequestModel(entries);
@@ -919,14 +924,15 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @return index
 	 *****************************************************************************/
 	private int findParamIndex(RequestEntry req) {
-		List<RequestEntry> filtered = filterRequests();
+		
 		int count = 0;
-		for (RequestEntry r : filtered) {
+		for (RequestEntry r : requestModel.entries) {
 			if (r.params != null && !r.params.isEmpty()) {
 				if (r == req) return count;
 				count++;
 			}
 		}
+		
 		return Math.max(0, count - 1);
 	}
 
@@ -935,42 +941,27 @@ public class PFRHttpConvertHar extends JFrame {
 	 *
 	 * @return filtered list of HarRequestEntry
 	 *****************************************************************************/
-	private List<RequestEntry> filterRequests() {
-		if (requestModel == null || requestModel.entries == null) return Collections.emptyList();
-
-		// Build regex patterns
-		String regexText = tfExcludeRegex.getText();
-		List<Pattern> patterns = Arrays.stream(regexText.split(","))
-				.map(String::trim)
-				.filter(s -> !s.isEmpty())
-				.map(p -> {
-					try {
-						return Pattern.compile(p);
-					} catch (Exception e) {
-						// fallback: treat as literal
-						return Pattern.compile(Pattern.quote(p));
-					}
-				})
-				.collect(Collectors.toList());
-
-		return requestModel.entries.stream().filter(e -> {
-			// resource type filters
-			if (cbExcludeCss.isSelected() && "stylesheet".equalsIgnoreCase(e.resourceType)) return false;
-			if (cbExcludeScripts.isSelected() && "script".equalsIgnoreCase(e.resourceType)) return false;
-			if (cbExcludeImages.isSelected() && e.resourceType.toLowerCase().contains("image")) return false;
-			if (cbExcludeFonts.isSelected() && "font".equalsIgnoreCase(e.resourceType)) return false;
-
-			// regex exclude by URL
-			for (Pattern p : patterns) {
-				try {
-					if (p.matcher(e.url).find()) return false;
-				} catch (Exception ex) {
-					// ignore pattern errors
-				}
+	private ArrayList<RequestEntry> filterRequests() {
+		
+		ArrayList<RequestEntry> filtered = new ArrayList<>();
+		
+		//------------------------
+		// Check Null
+		if (requestModel == null || requestModel.entries == null) {
+			return filtered;
+		}
+		
+		//------------------------
+		// Make List
+		for(RequestEntry req : requestModel.entries) {
+			if(req.checkIncludeRequest()) {
+				filtered.add(req);
 			}
-			return true;
-		}).collect(Collectors.toList());
+		}
+		
+		return filtered;
 	}
+	
 
 	/*****************************************************************************
 	 * Escape string for embedding into generated Java source (simple).
@@ -1050,7 +1041,7 @@ public class PFRHttpConvertHar extends JFrame {
 	/*****************************************************************************
 	 * Represents a single request extracted from the HAR.
 	 *****************************************************************************/
-	private static class RequestEntry {
+	private class RequestEntry {
 		String method = "GET";
 		String url = "";
 		String urlHost = "";
@@ -1106,7 +1097,38 @@ public class PFRHttpConvertHar extends JFrame {
 			}
 			
 			urlVariable = "url_" + hostList.indexOf(urlHost); 
+
 		}
+		
+		/*****************************************************************************
+		 * Check if the requests should be included according to the UI options.
+		 *
+		 * @return filtered list of HarRequestEntry
+		 *****************************************************************************/
+		public boolean checkIncludeRequest() {
+			
+			//------------------------
+			// Check Resource Type
+			if (cbExcludeCss.isSelected() && "stylesheet".equalsIgnoreCase(resourceType)) return false;
+			if (cbExcludeScripts.isSelected() && "script".equalsIgnoreCase(resourceType)) return false;
+			if (cbExcludeImages.isSelected() && resourceType.toLowerCase().contains("image")) return false;
+			if (cbExcludeFonts.isSelected() && "font".equalsIgnoreCase(resourceType)) return false;
+
+			//------------------------
+			// Check the regular expressions
+			String regexText = tfExcludeRegex.getText();
+			
+			for(String regex : regexText.split(",")) {
+				if(PFR.Text.getRegexMatcherCached(regex.trim(), url).matches()) {
+					return false;
+				}
+			}
+			
+			
+			return true;
+
+		}
+
 
 		/*****************************************************************************
 		 * Create a safe Java identifier from a URL.
