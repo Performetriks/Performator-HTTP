@@ -551,11 +551,22 @@ public class PFRHttpConverter extends JFrame {
 					if (!el.isJsonObject()) continue;
 					JsonObject entry = el.getAsJsonObject();
 					JsonObject req = entry.has("request") && entry.get("request").isJsonObject() ? entry.getAsJsonObject("request") : null;
+					JsonObject resp = entry.has("response") && entry.get("response").isJsonObject() ? entry.getAsJsonObject("response") : null;
+					
 					if (req == null) continue;
 
 					RequestEntry hre = new RequestEntry();
 					hre.method = req.has("method") ? req.get("method").getAsString() : "GET";
 					hre.setURL( req.has("url") ? req.get("url").getAsString() : "");
+					
+					//--------------------------------------
+					// Get Status
+					if ( resp != null 
+					  && resp.has("status") 
+					  && resp.get("status").isJsonPrimitive()
+					  ){
+						hre.status = resp.get("status").getAsInt();
+					}
 					
 					//--------------------------------------
 					// Get Headers
@@ -902,6 +913,8 @@ import com.xresch.hsr.stats.HSRSLA;
 		}
 		
 		int idx = 0;
+		
+		//RequestEntry previous = null;
 		for (RequestEntry req : requests) {
 			
 			String responseVar = "r";
@@ -913,6 +926,24 @@ import com.xresch.hsr.stats.HSRSLA;
 			sb.append(postfix).append("//---------------------------------------------");
 			sb.append(postfix).append("// ");
 			sb.append(postfix).append("//---------------------------------------------");
+			
+			//----------------------------------------
+			// Check Skip Redirects
+			// this won't work as we don't know if the order in the HAR file is correct
+//			if (cbExcludeRedirects.isSelected() 
+//			&& previous != null
+//			&& (   previous.status == 301	// Moved
+//				|| previous.status == 302	// Found
+//				|| previous.status == 307	// Temporary Redirect
+//				|| previous.status == 308	// Permanent Redirect
+//			    )
+//			){		
+//				sb.append(postfix).append("// HTTP "+previous.status+" - Redirect Excluded: "+req.url+"\n");
+//				previous = req;
+//				continue;
+//			}
+//			
+//			previous = req;
 			
 			//----------------------------------------
 			// Print Variable
@@ -1247,6 +1278,8 @@ import com.xresch.hsr.stats.HSRSLA;
 		String urlHost = "";
 		String urlQuery = "";
 		String urlVariable = "";
+		
+		int status = 200; // response status
 		
 		LinkedHashMap<String, String> headers = new LinkedHashMap<>();
 		LinkedHashMap<String, String> params = new LinkedHashMap<>();
