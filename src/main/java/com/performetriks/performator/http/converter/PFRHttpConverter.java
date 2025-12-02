@@ -76,7 +76,7 @@ import com.performetriks.performator.base.PFR;
  * NOTE: This is a single-file demonstration. The generated Java code in the right pane is
  * textual output and not compiled/executed by this application.
  *****************************************************************************/
-public class PFRHttpConvertHar extends JFrame {
+public class PFRHttpConverter extends JFrame {
 
 	private static final long serialVersionUID = 1L;
 	
@@ -126,7 +126,7 @@ public class PFRHttpConvertHar extends JFrame {
 	 *****************************************************************************/
 	public static void main(String[] args) {
 		SwingUtilities.invokeLater(() -> {
-			PFRHttpConvertHar g = new PFRHttpConvertHar();
+			PFRHttpConverter g = new PFRHttpConverter();
 			g.setVisible(true);
 		});
 	}
@@ -134,7 +134,7 @@ public class PFRHttpConvertHar extends JFrame {
 	/*****************************************************************************
 	 * Constructor: sets up the JFrame and initializes UI components.
 	 *****************************************************************************/
-	public PFRHttpConvertHar() {
+	public PFRHttpConverter() {
 		super("HAR to Performator Converter");
 		initializeFrame();
 		initializeUI();
@@ -194,6 +194,7 @@ public class PFRHttpConvertHar extends JFrame {
 		//--------------------------------------
 		// Top: file chooser area
 		JPanel filePanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
+		labelFilePath.setForeground(reallyLight);
 		filePanel.add(btnChooseHar);
 		filePanel.add(btnChoosePostman);
 		filePanel.add(labelFilePath);
@@ -1246,7 +1247,7 @@ public class PFRHttpConvertHar extends JFrame {
 		 * index.
 		 *********************************************/
 		public String indexedName(int index) {
-			return PFRHttpConvertHar.threeDigits(index) + "_" + getSanitizedName();
+			return PFRHttpConverter.threeDigits(index) + "_" + getSanitizedName();
 		}
 			
 		/*********************************************
