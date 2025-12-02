@@ -20,14 +20,10 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import javax.swing.ButtonGroup;
 import javax.swing.JButton;
@@ -113,6 +109,7 @@ public class PFRHttpConvertHar extends JFrame {
 	private final JCheckBox cbDebugLogOnFail = new JCheckBox("Debug Log On Fail", true);
 	private final JSpinner spDefaultResponseTimeout = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
 	private final JSpinner spDefaultPause = new JSpinner(new SpinnerNumberModel(0, 0, Integer.MAX_VALUE, 1));
+	private final JSpinner spMaxNameLength = new JSpinner(new SpinnerNumberModel(40, 0, Integer.MAX_VALUE, 1));
 
 	private final JRadioButton rbSlaGlobal = new JRadioButton("Global", true);
 	private final JRadioButton rbSlaPerRequest = new JRadioButton("Per Request", false);
@@ -310,7 +307,16 @@ public class PFRHttpConvertHar extends JFrame {
 		inputs.add(lblPause, c);
 		c.gridx = 1;
 		inputs.add(spDefaultPause, c);
+		
+		JLabel lblMaxNameLength = new JLabel("Max Name length:");
+		lblPause.setToolTipText("Defines the maximum length of the request name.");
+		c.gridx = 0;
+		c.gridy++;
+		inputs.add(lblMaxNameLength, c);
+		c.gridx = 1;
+		inputs.add(spMaxNameLength, c);
 
+		//--------------------------------------
 		// SLA radio buttons
 		JLabel lblSla = new JLabel("Default SLA:");
 		lblSla.setToolTipText("Global: add a DEFAULT_SLA constant. Per Request: add a .sla(...) per request. None: do nothing.");
@@ -429,6 +435,7 @@ public class PFRHttpConvertHar extends JFrame {
 		cbDebugLogOnFail.addItemListener(itemListener);
 		spDefaultResponseTimeout.addChangeListener(changeListenerForSpinner);
 		spDefaultPause.addChangeListener(changeListenerForSpinner);
+		spMaxNameLength.addChangeListener(changeListenerForSpinner);
 
 		tfExcludeRegex.getDocument().addDocumentListener(new DocumentListener() {
 			public void changedUpdate(DocumentEvent e) { regenerateCode(); }
@@ -476,7 +483,6 @@ public class PFRHttpConvertHar extends JFrame {
 			} catch (Exception ex) {
 				JOptionPane.showMessageDialog(this, "Failed to parse HAR: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
 				requestModel = new RequestModel(); // reset model
-				RequestEntry.clearHostList();
 			}
 			regenerateCode();
 		}
@@ -496,6 +502,8 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @throws IOException on IO problems
 	 *****************************************************************************/
 	private void parseHarFile(File file) throws IOException {
+		
+		RequestEntry.clearHostList();
 		
 		try (Reader r = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
 			
@@ -994,44 +1002,6 @@ public class PFRHttpConvertHar extends JFrame {
 		return String.format("%03d", number*10);
 	}
 	
-	/*****************************************************************************
-	 * Create a safe Java identifier from a URL (very simple sanitizer).
-	 *
-	 * @param url url
-	 * @return sanitized name
-	 *****************************************************************************/
-//	private String sanitizeName(int i, String urlQuery) {
-//	
-//		//-------------------------------
-//		// Check Null
-//		if (urlQuery == null) return "request";
-//		
-//		//-------------------------------
-//		// Remove slashes
-//		urlQuery = urlQuery.substring(1); // Remove slash at the beginning
-//		if(urlQuery.endsWith("/")) {
-//			urlQuery = urlQuery.substring(0, urlQuery.length()-1); // Remove slash at the end
-//		}
-//		
-//		
-//		//-------------------------------
-//		// Remove Special chars
-//		String cleaned = urlQuery.replaceAll("[^a-zA-Z0-9]", "_");
-//		if (cleaned.length() > 40) cleaned = cleaned.substring(0, 40);
-//		if (cleaned.isEmpty()) cleaned = "request";
-//		
-//		if(cleaned.endsWith("_")) {
-//			cleaned = cleaned.substring(0, cleaned.length()-1); // Remove _ at the end
-//		}
-//		
-//		//-------------------------------
-//		// Prefix with 3 digits
-//		return threeDigits(i) + "_" + cleaned;
-//	}
-
-	// -------------------------
-	// Inner helper classes
-	// -------------------------
 
 	/*****************************************************************************
 	 * Represents the parsed HAR model (only the pieces we need).
@@ -1057,7 +1027,6 @@ public class PFRHttpConvertHar extends JFrame {
 		String urlHost = "";
 		String urlQuery = "";
 		String urlVariable = "";
-		String sanitizedName = "";
 		LinkedHashMap<String, String> headers = new LinkedHashMap<>();
 		LinkedHashMap<String, String> params = new LinkedHashMap<>();
 		String postData = "";
@@ -1072,7 +1041,7 @@ public class PFRHttpConvertHar extends JFrame {
 		 * index.
 		 *********************************************/
 		public String indexedName(int index) {
-			return PFRHttpConvertHar.threeDigits(index) + "_" + sanitizedName;
+			return PFRHttpConvertHar.threeDigits(index) + "_" + getSanitizedName();
 		}
 			
 		/*********************************************
@@ -1098,7 +1067,6 @@ public class PFRHttpConvertHar extends JFrame {
 			this.url = URL;
 			this.urlHost = PFR.Text.extractRegexFirst("(.*?//.*?)/", 0, URL);
 			this.urlQuery = PFR.Text.extractRegexFirst(".*?//.*?(/.*)", 0, URL);
-			setSanitizeName(urlQuery);
 			
 			//------------------------
 			// Define URL Variable
@@ -1138,40 +1106,41 @@ public class PFRHttpConvertHar extends JFrame {
 			return true;
 
 		}
-
-
+		
 		/*****************************************************************************
 		 * Create a safe Java identifier from a URL.
 		 *
 		 * @param url url
 		 * @return sanitized name
 		 *****************************************************************************/
-		private void setSanitizeName(String urlQuery) {
+		public String getSanitizedName() {
 		
 			//-------------------------------
 			// Check Null
-			if (urlQuery == null) sanitizedName = "request";
+			if (urlQuery == null) return "request";
 			
 			//-------------------------------
 			// Remove slashes
-			urlQuery = urlQuery.substring(1); // Remove slash at the beginning
-			if(urlQuery.endsWith("/")) {
-				urlQuery = urlQuery.substring(0, urlQuery.length()-1); // Remove slash at the end
+			String sanitized = urlQuery.substring(1); // Remove slash at the beginning
+			if(sanitized.endsWith("/")) {
+				sanitized = sanitized.substring(0, sanitized.length()-1); // Remove slash at the end
 			}
 			
 			//-------------------------------
 			// Remove Special chars
-			String cleaned = urlQuery.replaceAll("[^a-zA-Z0-9]", "_");
-			if (cleaned.length() > 40) cleaned = cleaned.substring(0, 40);
-			if (cleaned.isEmpty()) cleaned = "request";
+			int maxLength = (Integer)spMaxNameLength.getValue();
+			sanitized = sanitized.replaceAll("[^a-zA-Z0-9]", "_");
 			
-			if(cleaned.endsWith("_")) {
-				cleaned = cleaned.substring(0, cleaned.length()-1); // Remove _ at the end
+			if (sanitized.length() > maxLength) sanitized = sanitized.substring(0, maxLength);
+			if (sanitized.isEmpty()) sanitized = "request";
+			
+			if(sanitized.endsWith("_")) {
+				sanitized = sanitized.substring(0, sanitized.length()-1); // Remove _ at the end
 			}
 			
 			//-------------------------------
 			// Prefix with 3 digits
-			sanitizedName = cleaned;
+			return sanitized;
 		}
 	}
 
