@@ -98,6 +98,7 @@ public class PFRHttpConvertHar extends JFrame {
 	private final JCheckBox cbExcludeFonts = new JCheckBox("Exclude Fonts", true);
 	private final JTextField tfExcludeRegex = new JTextField(".*.fileA,.*fileB");
 
+	private final JCheckBox cbMakeURLVariable = new JCheckBox("Make URL Variables", true);
 	private final JCheckBox cbSeparateResponses = new JCheckBox("Separate Responses", false);
 	private final JCheckBox cbSeparateRequests = new JCheckBox("Separate Requests", false);
 	private final JCheckBox cbSeparateHeaders = new JCheckBox("Separate Headers", true);
@@ -208,6 +209,7 @@ public class PFRHttpConvertHar extends JFrame {
 		c.gridx = 0;
 		c.gridy = 0;
 
+		//--------------------------------------
 		// Helper to add labeled components with tooltips (decorator)
 		BiConsumer<JComponent, String> addWithDesc = (comp, desc) -> {
 			comp.setToolTipText("<html>" + desc + "</html>");
@@ -215,20 +217,23 @@ public class PFRHttpConvertHar extends JFrame {
 			inputs.add(comp instanceof JCheckBox ? comp : new JLabel(comp.getName() == null ? "" : comp.getName()), c);
 		};
 
+		//--------------------------------------
 		// We'll add rows manually with label and component
 		// Row: Exclude Redirects
+		int row = 0;
 		addLabeled(inputs, c,  "Exclude Redirects", cbExcludeRedirects,
 				"Checkbox to disable auto following HTTP redirects should be included in the script. " +
-						"If unchecked, the generated request builder will include .disableFollowRedirects().", 0);
+						"If unchecked, the generated request builder will include .disableFollowRedirects().", row++);
 		addLabeled(inputs, c,  "Exclude CSS", cbExcludeCss,
-				"Do not generate code for requests that have _resourceType=stylesheet.", 1);
+				"Do not generate code for requests that have _resourceType=stylesheet.", row++);
 		addLabeled(inputs, c,  "Exclude Scripts", cbExcludeScripts,
-				"Do not generate code for requests that have _resourceType=script.", 2);
+				"Do not generate code for requests that have _resourceType=script.", row++);
 		addLabeled(inputs, c,  "Exclude Images", cbExcludeImages,
-				"Do not generate code for requests that have image types in _resourceType.", 3);
+				"Do not generate code for requests that have image types in _resourceType.", row++);
 		addLabeled(inputs, c,  "Exclude Fonts", cbExcludeFonts,
-				"Do not generate code for requests that have _resourceType=font.", 4);
+				"Do not generate code for requests that have _resourceType=font.", row++);
 
+		//--------------------------------------
 		// Exclude Regex
 		JLabel lblExcludeRegex = new JLabel("Exclude Regex (comma separated):");
 		lblExcludeRegex.setToolTipText("Excludes any request whose URL matches any of the provided regular expressions.");
@@ -238,33 +243,55 @@ public class PFRHttpConvertHar extends JFrame {
 		c.gridx = 1;
 		tfExcludeRegex.setToolTipText("Comma separated regex list to exclude requests by URL. Default: .*.js,.*.css,.*.svg");
 		inputs.add(tfExcludeRegex, c);
+		row++;
 
+		//--------------------------------------
 		// Other toggles
+		addLabeled(inputs, c, "Make URL Variables", cbMakeURLVariable,
+				"If selected, the host part of the url will be extracted and put into a variable.", row++);
 		addLabeled(inputs, c, "Separate Responses", cbSeparateResponses,
-				"If selected, each response gets it's own PFRHttpResponse instance.", 6);
+				"If selected, each response gets it's own PFRHttpResponse instance.", row++);
 		addLabeled(inputs, c, "Separate Requests", cbSeparateRequests,
-				"If selected, HTTP requests will be generated into separate methods (one per request) and called from execute().", 7);
+				"If selected, HTTP requests will be generated into separate methods (one per request) and called from execute().", row++);
 		addLabeled(inputs, c, "Separate Headers", cbSeparateHeaders,
-				"If selected, headers will be emitted in separate getHeaders*() methods; otherwise they are inline as .header(...).", 8);
+				"If selected, headers will be emitted in separate getHeaders*() methods; otherwise they are inline as .header(...).", row++);
 		addLabeled(inputs, c, "Separate Parameters", cbSeparateParameters,
-				"If selected, parameters will be emitted in separate getParams*() methods; otherwise they are inline as .param(...).", 9);
+				"If selected, parameters will be emitted in separate getParams*() methods; otherwise they are inline as .param(...).", row++);
 		addLabeled(inputs, c, "Surround with try-catch", cbSurroundTryCatch,
-				"If selected, execute() will include try-catch around the requests.", 10);
+				"If selected, execute() will include try-catch around the requests.", row++);
 
+		//--------------------------------------
 		// Checks / placeholders
-		addLabeled(inputs, c, "Add checkBodyContains(\"\")", cbAddCheckBodyContains,
-				"Add a placeholder checkBodyContains(\"\") in the generated request builder chain.", 11);
-		addLabeled(inputs, c, "Add checkStatusEquals(200)", cbAddCheckStatusEquals,
-				"Add a placeholder checkStatusEquals(200) in the generated request builder chain.", 12);
-		addLabeled(inputs, c, "Add measureSize(ByteSize.KB)", cbAddMeasureSize,
-				"Add a placeholder measureSize(ByteSize.KB) in the generated request builder chain.", 13);
-		addLabeled(inputs, c, "Add throwOnFail()", cbAddThrowOnFail,
-				"Add throwOnFail() after .send() in the generated chain.", 14);
+		addLabeled(inputs, c, "Add checkBodyContains(\"\")"
+				, cbAddCheckBodyContains,
+				"Add a placeholder checkBodyContains(\"\") in the generated request builder chain."
+				, row++
+				);
+		
+		addLabeled(inputs, c, "Add checkStatusEquals(200)"
+				, cbAddCheckStatusEquals,
+				"Add a placeholder checkStatusEquals(200) in the generated request builder chain."
+				, row++
+				);
+		
+		addLabeled(inputs, c, "Add measureSize(ByteSize.KB)"
+				, cbAddMeasureSize,
+				"Add a placeholder measureSize(ByteSize.KB) in the generated request builder chain."
+				, row++
+				);
+		
+		addLabeled(inputs, c, "Add throwOnFail()"
+				, cbAddThrowOnFail,
+				"Add throwOnFail() after .send() in the generated chain."
+				, row++
+				);
 
+		//--------------------------------------
 		// Other general options
 		addLabeled(inputs, c, "Debug Log On Fail", cbDebugLogOnFail,
 				"If selected, PFRHttp.debugLogFail(true); will be emitted in initializeUser().", 15);
 
+		//--------------------------------------
 		// Numeric spinners
 		JLabel lblRespTO = new JLabel("Default Response Timeout (s) [0 = none]:");
 		lblRespTO.setToolTipText("If > 0 then PFRHttp.defaultResponseTimeout(Duration.ofSeconds(value)) will be added.");
@@ -387,6 +414,7 @@ public class PFRHttpConvertHar extends JFrame {
 		cbExcludeScripts.addItemListener(itemListener);
 		cbExcludeImages.addItemListener(itemListener);
 		cbExcludeFonts.addItemListener(itemListener);
+		cbMakeURLVariable.addItemListener(itemListener);
 		cbSeparateResponses.addItemListener(itemListener);
 		cbSeparateRequests.addItemListener(itemListener);
 		cbSeparateHeaders.addItemListener(itemListener);
@@ -581,15 +609,26 @@ public class PFRHttpConvertHar extends JFrame {
 		sb.append("import com.xresch.hsr.utils.ByteSize;\n");
 		sb.append("\n");
 
+		//--------------------------------------------------
 		// Class header & optional global SLA
 		boolean slaGlobal = rbSlaGlobal.isSelected();
 		if (slaGlobal) {
 			sb.append("public class UsecaseFromHar extends PFRUsecase {\n\n");
-			sb.append("	private static final HSRSLA DEFAULT_SLA = new HSRSLA(HSRMetric.failrate, Operator.LT, 5);\n\n");
+			sb.append("\tprivate HSRSLA DEFAULT_SLA = new HSRSLA(HSRMetric.failrate, Operator.LT, 5);\n\n");
 		} else {
 			sb.append("public class UsecaseFromHar extends PFRUsecase {\n\n");
 		}
 
+		//--------------------------------------------------
+		// URL Variables
+		if(cbMakeURLVariable.isSelected()) {
+			ArrayList<String> hostList = RequestEntry.getHostList();
+			for(int i = 0; i < hostList.size(); i++) {
+				sb.append("\tprivate String url_"+i+" = \""+hostList.get(i)+"\";\n");
+			}
+		}
+		
+		//--------------------------------------------------
 		// initializeUser method
 		sb.append("	/***************************************************************************\n");
 		sb.append("	 * initializeUser\n");
@@ -767,9 +806,18 @@ public class PFRHttpConvertHar extends JFrame {
 
 		String postfix = "\r\n\t\t\t";
 		
-		
-		
-		sb.append("PFRHttp.create(\"").append(req.indexedName(idx)).append("\", \"").append(escape(req.url)).append("\")");
+		//--------------------------------------------------
+		// URL Variables
+		String urlPart = "\""+escape(req.url)+"\"";
+		if(cbMakeURLVariable.isSelected()) {
+			
+			urlPart = req.urlVariable +" + \""+ escape(req.urlQuery) +"\"";
+
+		}
+
+		//--------------------------------------------------
+		// Create
+		sb.append("PFRHttp.create(\"").append(req.indexedName(idx)).append("\", ").append(urlPart).append(")");
 		
 		//----------------------------------
 		// SLA 
@@ -1014,10 +1062,10 @@ public class PFRHttpConvertHar extends JFrame {
 		String postData = "";
 		String resourceType = "";
 		
-		public static ArrayList<String> hostURLs = new ArrayList<>();
+		// keep track of all hosts
+		private static ArrayList<String> hostList = new ArrayList<>();
 		
-		
-		
+
 		/*********************************************
 		 * Returns the name prefixed with a 3 digit
 		 * index.
@@ -1026,6 +1074,20 @@ public class PFRHttpConvertHar extends JFrame {
 			return PFRHttpConvertHar.threeDigits(index) + "_" + sanitizedName;
 		}
 			
+		/*********************************************
+		 * Returns a clone of the host List
+		 *********************************************/
+		public static ArrayList<String> getHostList() {
+			ArrayList<String> clone = new ArrayList<>();
+			clone.addAll(hostList);
+			return clone;
+		}
+		/*********************************************
+		 * Returns a clone of the host List
+		 *********************************************/
+		public static void clearHostList() {
+			 hostList = new ArrayList<>();
+		}
 		
 		/*********************************************
 		 * Set the URL of this Request Entry.
@@ -1037,11 +1099,15 @@ public class PFRHttpConvertHar extends JFrame {
 			this.urlQuery = PFR.Text.extractRegexFirst(".*?//.*?(/.*)", 0, URL);
 			setSanitizeName(urlQuery);
 			
-			if( ! hostURLs.contains(urlHost) ) {
-				
+			//------------------------
+			// Define URL Variable
+			if( ! hostList.contains(urlHost) ) {
+				hostList.add(urlHost);
 			}
+			
+			urlVariable = "url_" + hostList.indexOf(urlHost); 
 		}
-		
+
 		/*****************************************************************************
 		 * Create a safe Java identifier from a URL.
 		 *
