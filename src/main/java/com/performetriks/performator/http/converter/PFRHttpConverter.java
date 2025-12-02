@@ -60,6 +60,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.performetriks.performator.base.PFR;
+import com.performetriks.performator.http.PFRHttp;
 
 /*****************************************************************************
  * A Swing application that loads a HAR (HTTP Archive) and generates Java code that uses
@@ -586,6 +587,7 @@ public class PFRHttpConverter extends JFrame {
 								JsonObject po = p.getAsJsonObject();
 								String name = po.has("name") ? po.get("name").getAsString() : null;
 								String value = po.has("value") ? po.get("value").getAsString() : null;
+								value = PFRHttp.decode(value);
 								if (name != null) hre.params.put(name, value == null ? "" : value);
 							}
 						}
@@ -813,26 +815,24 @@ public class PFRHttpConverter extends JFrame {
 	 * @return a string containing the generated Java source file
 	 *****************************************************************************/
 	private String generateFullClassCode() {
+		
 		StringBuilder sb = new StringBuilder();
+		
+		//--------------------------------------------------
+		// Package & Imports
+		sb.append("""
+package com.performetriks.performator.quickstart.usecase;
 
-		// Package & imports
-		sb.append("package com.performetriks.performator.quickstart.usecase;\n\n");
-		sb.append("import java.util.ArrayList;\n");
-		sb.append("import java.util.LinkedHashMap;\n");
-		sb.append("import java.util.HashMap;\n");
-		sb.append("import java.util.List;\n");
-		sb.append("import java.util.Map;\n");
-		sb.append("import java.time.Duration;\n");
-		sb.append("\n");
-		sb.append("import com.performetriks.performator.base.PFRUsecase;\n");
-		sb.append("import com.performetriks.performator.http.PFRHttp;\n");
-		sb.append("import com.performetriks.performator.http.PFRHttpResponse;\n");
-		sb.append("import com.performetriks.performator.http.ResponseFailedException;\n");
-		sb.append("import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;\n");
-		sb.append("import com.xresch.hsr.stats.HSRExpression.Operator;\n");
-		sb.append("import com.xresch.hsr.stats.HSRSLA;\n");
-		sb.append("import com.xresch.hsr.utils.ByteSize;\n");
-		sb.append("\n");
+import java.util.LinkedHashMap;
+import com.performetriks.performator.base.PFRUsecase;
+import com.performetriks.performator.http.PFRHttp;
+import com.performetriks.performator.http.PFRHttpResponse;
+import com.performetriks.performator.http.ResponseFailedException;
+import com.xresch.hsr.stats.HSRExpression.Operator;
+import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
+import com.xresch.hsr.stats.HSRSLA;
+				
+			""");
 
 		//--------------------------------------------------
 		// Class header & optional global SLA
@@ -1093,9 +1093,9 @@ public class PFRHttpConverter extends JFrame {
 		if (req.hasBody()) {
 			if(req.isBodyJSON()) {
 				sb.append(postfix)
-					.append("\t.bodyJSON(\"\"\"")
+					.append("\t.body(\"\"\"")
 					.append(postfix).append("\t\t")
-						.append( PFR.Text.replaceNewlines(req.bodyAsJson, postfix+"\t\t") )
+						.append( PFR.Text.replaceNewlines(req.bodyAsJson.trim(), postfix+"\t\t") )
 					.append(postfix).append("\t\"\"\")")
 					;
 			}else {
@@ -1103,14 +1103,14 @@ public class PFRHttpConverter extends JFrame {
 				sb.append(postfix)
 				.append("\t.body(\"\"\"")
 				.append(postfix).append("\t\t")
-					.append( PFR.Text.replaceNewlines(req.body, postfix+"\t\t") )
+					.append( PFR.Text.replaceNewlines(req.body.trim(), postfix+"\t\t") )
 				.append(postfix).append("\t\"\"\")")
 				;
 			}
 		}
 		
 		//----------------------------------
-		// options
+		// Various Options
 		if (!cbExcludeRedirects.isSelected()) {		sb.append(postfix).append("\t.disableFollowRedirects()");	}
 		if (cbAddCheckStatusEquals.isSelected()) {	sb.append(postfix).append("\t.checkStatusEquals(200)");	}
 		if (cbAddCheckBodyContains.isSelected()) {	sb.append(postfix).append("\t.checkBodyContains(\"\")");	}
@@ -1389,8 +1389,10 @@ public class PFRHttpConverter extends JFrame {
 				sanitized = sanitized.substring(0, sanitized.length()-1); // Remove slash at the end
 			}
 			
+			
 			//-------------------------------
 			// Remove Special chars
+			sanitized = PFRHttp.decode(sanitized);
 			int maxLength = (Integer)spMaxNameLength.getValue();
 			sanitized = sanitized.replaceAll("[^a-zA-Z0-9]", "_");
 			
@@ -1402,8 +1404,8 @@ public class PFRHttpConverter extends JFrame {
 			}
 			
 			//-------------------------------
-			// Prefix with 3 digits
-			return sanitized;
+			// Remove consecutive underscores
+			return PFR.Text.replaceAll(sanitized, "__+", "_");
 		}
 	}
 
