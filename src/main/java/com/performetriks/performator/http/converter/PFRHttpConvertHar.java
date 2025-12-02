@@ -496,13 +496,23 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @throws IOException on IO problems
 	 *****************************************************************************/
 	private void parseHarFile(File file) throws IOException {
+		
 		try (Reader r = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
+			
+			//---------------------------------
+			// Get Log Element
 			JsonElement rootEl = JsonParser.parseReader(r);
 			JsonObject root = rootEl.isJsonObject() ? rootEl.getAsJsonObject() : new JsonObject();
 			JsonObject log = root.has("log") && root.get("log").isJsonObject() ? root.getAsJsonObject("log") : null;
+			
+			//---------------------------------
+			// Get Entries Array
 			List<RequestEntry> entries = new ArrayList<>();
 			if (log != null && log.has("entries") && log.get("entries").isJsonArray()) {
 				JsonArray arr = log.getAsJsonArray("entries");
+				
+				//---------------------------------
+				// Iterate Entries
 				for (JsonElement el : arr) {
 					if (!el.isJsonObject()) continue;
 					JsonObject entry = el.getAsJsonObject();
@@ -514,7 +524,7 @@ public class PFRHttpConvertHar extends JFrame {
 					hre.setURL( req.has("url") ? req.get("url").getAsString() : "");
 					
 					//--------------------------------------
-					// headers
+					// Get Headers
 					hre.headers = new LinkedHashMap<>();
 					if (req.has("headers") && req.get("headers").isJsonArray()) {
 						JsonArray hdrs = req.getAsJsonArray("headers");
@@ -528,7 +538,7 @@ public class PFRHttpConvertHar extends JFrame {
 					}
 					
 					//--------------------------------------
-					// postData
+					// Get Post Data
 					if (req.has("postData") && req.get("postData").isJsonObject()) {
 						JsonObject pd = req.getAsJsonObject("postData");
 						if (pd.has("text")) {
