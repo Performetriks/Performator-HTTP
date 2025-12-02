@@ -575,7 +575,7 @@ public class PFRHttpConverter extends JFrame {
 					if (req.has("postData") && req.get("postData").isJsonObject()) {
 						JsonObject pd = req.getAsJsonObject("postData");
 						if (pd.has("text")) {
-							hre.postData = pd.get("text").getAsString();
+							hre.body = pd.get("text").getAsString();
 						}
 						// try to extract params if available
 						if (pd.has("params") && pd.get("params").isJsonArray()) {
@@ -649,9 +649,9 @@ public class PFRHttpConverter extends JFrame {
 	    }
 	}
 	
-	/**
+	/*****************************************************************************
 	 * Recursively process any "item" array in a Postman collection.
-	 */
+	 *****************************************************************************/
 	private void parseItemArray(JsonArray items, List<RequestEntry> entries) {
 
 	    for (JsonElement el : items) {
@@ -698,7 +698,7 @@ public class PFRHttpConverter extends JFrame {
 
 	                // raw body
 	                if (body.has("raw")) {
-	                    hre.postData = body.get("raw").getAsString();
+	                    hre.body = body.get("raw").getAsString();
 	                }
 	            }
 
@@ -1090,8 +1090,23 @@ public class PFRHttpConverter extends JFrame {
 		}
 		//----------------------------------
 		// post data/body
-		if (req.postData != null && !req.postData.isEmpty()) {
-			sb.append(postfix).append("\t.body(\"").append(escape(req.postData)).append("\")");
+		if (req.hasBody()) {
+			if(req.isBodyJSON()) {
+				sb.append(postfix)
+					.append("\t.bodyJSON(\"\"\"")
+					.append(postfix).append("\t\t")
+						.append( PFR.Text.replaceNewlines(req.bodyAsJson, postfix+"\t\t") )
+					.append(postfix).append("\t\"\"\")")
+					;
+			}else {
+				
+				sb.append(postfix)
+				.append("\t.body(\"\"\"")
+				.append(postfix).append("\t\t")
+					.append( PFR.Text.replaceNewlines(req.body, postfix+"\t\t") )
+				.append(postfix).append("\t\"\"\")")
+				;
+			}
 		}
 		
 		//----------------------------------
@@ -1235,7 +1250,8 @@ public class PFRHttpConverter extends JFrame {
 		
 		LinkedHashMap<String, String> headers = new LinkedHashMap<>();
 		LinkedHashMap<String, String> params = new LinkedHashMap<>();
-		String postData = "";
+		String body = "";
+		String bodyAsJson = ""; // used for JSON body
 		String resourceType = "";
 		
 		// keep track of all hosts
@@ -1258,11 +1274,48 @@ public class PFRHttpConverter extends JFrame {
 			clone.addAll(hostList);
 			return clone;
 		}
+		
 		/*********************************************
 		 * Returns a clone of the host List
 		 *********************************************/
 		public static void clearHostList() {
 			 hostList = new ArrayList<>();
+		}
+		
+		/*********************************************
+		 * Returns true if request has a body
+		 *********************************************/
+		public boolean hasBody() {
+			return ( body != null && !body.isBlank());
+		}
+		
+		/*********************************************
+		 * Returns true if the request body is of 
+		 * type JSON
+		 *********************************************/
+		public boolean isBodyJSON() {
+			
+			//--------------------------
+			// Check no body
+			if(!hasBody()) { return false; }
+			
+			//--------------------------
+			// Check JSON start
+			if(! body.startsWith("{")
+			&& ! body.startsWith("[")) {
+				return false;
+			}
+			
+			//--------------------------
+			// Check Null
+			try {
+				JsonElement e = PFR.JSON.fromJson(body);
+				bodyAsJson = PFR.JSON.toJSONPretty(e);
+			}catch(Throwable e){
+				return false;
+			}
+			
+			return true;
 		}
 		
 		/*********************************************
