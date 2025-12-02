@@ -63,6 +63,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import com.performetriks.performator.base.PFR;
 
 /*****************************************************************************
  * A Swing application that loads a HAR (HTTP Archive) and generates Java code that uses
@@ -117,7 +118,7 @@ public class PFRHttpConvertHar extends JFrame {
 	private final JRadioButton rbSlaNone = new JRadioButton("None", false);
 
 	// Parsed HAR model (in-memory)
-	private HarModel harModel = new HarModel();
+	private RequestModel requestModel = new RequestModel();
 
 	/*****************************************************************************
 	 * Main entrypoint: create and show the UI.
@@ -171,6 +172,7 @@ public class PFRHttpConvertHar extends JFrame {
 		
         // tweak some UIManager colors
         UIManager.put("control", reallyDark);
+        UIManager.put("text", reallyLight);
         UIManager.put("info", new Color(60, 60, 60));
         UIManager.put("nimbusBase", reallyDark);
         UIManager.put("nimbusAlertYellow", new Color(248, 187, 0));
@@ -443,7 +445,7 @@ public class PFRHttpConvertHar extends JFrame {
 				parseHarFile(f);
 			} catch (Exception ex) {
 				JOptionPane.showMessageDialog(this, "Failed to parse HAR: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-				harModel = new HarModel(); // reset model
+				requestModel = new RequestModel(); // reset model
 			}
 			regenerateCode();
 		}
@@ -467,7 +469,7 @@ public class PFRHttpConvertHar extends JFrame {
 			JsonElement rootEl = JsonParser.parseReader(r);
 			JsonObject root = rootEl.isJsonObject() ? rootEl.getAsJsonObject() : new JsonObject();
 			JsonObject log = root.has("log") && root.get("log").isJsonObject() ? root.getAsJsonObject("log") : null;
-			List<HarRequestEntry> entries = new ArrayList<>();
+			List<RequestEntry> entries = new ArrayList<>();
 			if (log != null && log.has("entries") && log.get("entries").isJsonArray()) {
 				JsonArray arr = log.getAsJsonArray("entries");
 				for (JsonElement el : arr) {
@@ -476,9 +478,11 @@ public class PFRHttpConvertHar extends JFrame {
 					JsonObject req = entry.has("request") && entry.get("request").isJsonObject() ? entry.getAsJsonObject("request") : null;
 					if (req == null) continue;
 
-					HarRequestEntry hre = new HarRequestEntry();
+					RequestEntry hre = new RequestEntry();
 					hre.method = req.has("method") ? req.get("method").getAsString() : "GET";
-					hre.url = req.has("url") ? req.get("url").getAsString() : "";
+					hre.setURL( req.has("url") ? req.get("url").getAsString() : "");
+					
+					//--------------------------------------
 					// headers
 					hre.headers = new LinkedHashMap<>();
 					if (req.has("headers") && req.get("headers").isJsonArray()) {
@@ -491,6 +495,8 @@ public class PFRHttpConvertHar extends JFrame {
 							if (!name.isEmpty()) hre.headers.put(name, value);
 						}
 					}
+					
+					//--------------------------------------
 					// postData
 					if (req.has("postData") && req.get("postData").isJsonObject()) {
 						JsonObject pd = req.getAsJsonObject("postData");
@@ -510,6 +516,8 @@ public class PFRHttpConvertHar extends JFrame {
 							}
 						}
 					}
+					
+					//--------------------------------------
 					// custom _resourceType: sometimes present in _resourceType or in comment/other
 					String resourceType = "";
 					if (entry.has("_resourceType")) {
@@ -525,7 +533,7 @@ public class PFRHttpConvertHar extends JFrame {
 					entries.add(hre);
 				}
 			}
-			harModel = new HarModel(entries);
+			requestModel = new RequestModel(entries);
 		}
 	}
 
@@ -614,7 +622,7 @@ public class PFRHttpConvertHar extends JFrame {
 		}
 
 		// Iterate requests based on filters
-		List<HarRequestEntry> requests = filterRequests();
+		List<RequestEntry> requests = filterRequests();
 
 		// If separateRequests true -> generate methods and call them
 		boolean separateResponses = cbSeparateResponses.isSelected();
@@ -630,11 +638,11 @@ public class PFRHttpConvertHar extends JFrame {
 		}
 		
 		int idx = 0;
-		for (HarRequestEntry req : requests) {
+		for (RequestEntry req : requests) {
 			
 			String responseVar = "r";
 
-			String name = sanitizeName(idx,req.url);
+			String name = req.indexedName(idx);
 						
 			//----------------------------------------
 			// Header
@@ -679,8 +687,8 @@ public class PFRHttpConvertHar extends JFrame {
 		// If separateRequests, create separate methods
 		if (separateRequests) {
 			idx = 0;
-			for (HarRequestEntry req : requests) {
-				String methodName = "r"+sanitizeName(idx, req.url);
+			for (RequestEntry req : requests) {
+				String methodName = "r"+ req.indexedName(idx);
 				sb.append("	/***************************************************************************\n");
 				sb.append("	 * \n");
 				sb.append("	 ***************************************************************************/\n");
@@ -694,7 +702,7 @@ public class PFRHttpConvertHar extends JFrame {
 		// Add header methods if separateHeaders true
 		if (separateHeaders) {
 			int hidx = 0;
-			for (HarRequestEntry req : requests) {
+			for (RequestEntry req : requests) {
 				if (req.headers != null && !req.headers.isEmpty()) {
 					sb.append("	/***************************************************************************\n");
 					sb.append("	 * \n");
@@ -714,7 +722,7 @@ public class PFRHttpConvertHar extends JFrame {
 		// Add params methods if separateParams true
 		if (separateParams) {
 			int pidx = 0;
-			for (HarRequestEntry req : requests) {
+			for (RequestEntry req : requests) {
 				if (req.params != null && !req.params.isEmpty()) {
 					sb.append("	/***************************************************************************\n");
 					sb.append("	 * \n");
@@ -754,14 +762,14 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @param separateParams whether params are emitted in separate method
 	 * @return string with method body
 	 *****************************************************************************/
-	private String generateRequestBuilderBody(HarRequestEntry req, int idx, boolean separateHeaders, boolean separateParams) {
+	private String generateRequestBuilderBody(RequestEntry req, int idx, boolean separateHeaders, boolean separateParams) {
 		StringBuilder sb = new StringBuilder();
 
 		String postfix = "\r\n\t\t\t";
 		
 		
 		
-		sb.append("PFRHttp.create(\"").append(sanitizeName(idx,req.url)).append("\", \"").append(escape(req.url)).append("\")");
+		sb.append("PFRHttp.create(\"").append(req.indexedName(idx)).append("\", \"").append(escape(req.url)).append("\")");
 		
 		//----------------------------------
 		// SLA 
@@ -843,11 +851,11 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @param req the request
 	 * @return index integer
 	 *****************************************************************************/
-	private int findHeaderIndex(HarRequestEntry req) {
+	private int findHeaderIndex(RequestEntry req) {
 		// Simple deterministic mapping based on the position in the filtered list
-		List<HarRequestEntry> filtered = filterRequests();
+		List<RequestEntry> filtered = filterRequests();
 		int count = 0;
-		for (HarRequestEntry r : filtered) {
+		for (RequestEntry r : filtered) {
 			if (r.headers != null && !r.headers.isEmpty()) {
 				if (r == req) return count;
 				count++;
@@ -862,10 +870,10 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @param req request
 	 * @return index
 	 *****************************************************************************/
-	private int findParamIndex(HarRequestEntry req) {
-		List<HarRequestEntry> filtered = filterRequests();
+	private int findParamIndex(RequestEntry req) {
+		List<RequestEntry> filtered = filterRequests();
 		int count = 0;
-		for (HarRequestEntry r : filtered) {
+		for (RequestEntry r : filtered) {
 			if (r.params != null && !r.params.isEmpty()) {
 				if (r == req) return count;
 				count++;
@@ -879,8 +887,8 @@ public class PFRHttpConvertHar extends JFrame {
 	 *
 	 * @return filtered list of HarRequestEntry
 	 *****************************************************************************/
-	private List<HarRequestEntry> filterRequests() {
-		if (harModel == null || harModel.entries == null) return Collections.emptyList();
+	private List<RequestEntry> filterRequests() {
+		if (requestModel == null || requestModel.entries == null) return Collections.emptyList();
 
 		// Build regex patterns
 		String regexText = tfExcludeRegex.getText();
@@ -897,7 +905,7 @@ public class PFRHttpConvertHar extends JFrame {
 				})
 				.collect(Collectors.toList());
 
-		return harModel.entries.stream().filter(e -> {
+		return requestModel.entries.stream().filter(e -> {
 			// resource type filters
 			if (cbExcludeCss.isSelected() && "stylesheet".equalsIgnoreCase(e.resourceType)) return false;
 			if (cbExcludeScripts.isSelected() && "script".equalsIgnoreCase(e.resourceType)) return false;
@@ -933,9 +941,8 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @param number
 	 * @return 3 digits string
 	 *****************************************************************************/
-	private String threeDigits(int number) {
+	private static String threeDigits(int number) {
 		return String.format("%03d", number*10);
-		
 	}
 	
 	/*****************************************************************************
@@ -944,16 +951,34 @@ public class PFRHttpConvertHar extends JFrame {
 	 * @param url url
 	 * @return sanitized name
 	 *****************************************************************************/
-	private String sanitizeName(int i, String url) {
-	
-		if (url == null) return "request";
-		
-		String cleaned = url.replaceAll("https?://.*?/", "").replaceAll("[^a-zA-Z0-9]", "_");
-		if (cleaned.length() > 40) cleaned = cleaned.substring(0, 40);
-		if (cleaned.isEmpty()) cleaned = "request";
-		
-		return threeDigits(i) + "_" + cleaned;
-	}
+//	private String sanitizeName(int i, String urlQuery) {
+//	
+//		//-------------------------------
+//		// Check Null
+//		if (urlQuery == null) return "request";
+//		
+//		//-------------------------------
+//		// Remove slashes
+//		urlQuery = urlQuery.substring(1); // Remove slash at the beginning
+//		if(urlQuery.endsWith("/")) {
+//			urlQuery = urlQuery.substring(0, urlQuery.length()-1); // Remove slash at the end
+//		}
+//		
+//		
+//		//-------------------------------
+//		// Remove Special chars
+//		String cleaned = urlQuery.replaceAll("[^a-zA-Z0-9]", "_");
+//		if (cleaned.length() > 40) cleaned = cleaned.substring(0, 40);
+//		if (cleaned.isEmpty()) cleaned = "request";
+//		
+//		if(cleaned.endsWith("_")) {
+//			cleaned = cleaned.substring(0, cleaned.length()-1); // Remove _ at the end
+//		}
+//		
+//		//-------------------------------
+//		// Prefix with 3 digits
+//		return threeDigits(i) + "_" + cleaned;
+//	}
 
 	// -------------------------
 	// Inner helper classes
@@ -962,14 +987,14 @@ public class PFRHttpConvertHar extends JFrame {
 	/*****************************************************************************
 	 * Represents the parsed HAR model (only the pieces we need).
 	 *****************************************************************************/
-	private static class HarModel {
-		List<HarRequestEntry> entries;
+	private static class RequestModel {
+		List<RequestEntry> entries;
 
-		HarModel() {
+		RequestModel() {
 			this.entries = new ArrayList<>();
 		}
 
-		HarModel(List<HarRequestEntry> entries) {
+		RequestModel(List<RequestEntry> entries) {
 			this.entries = entries;
 		}
 	}
@@ -977,13 +1002,79 @@ public class PFRHttpConvertHar extends JFrame {
 	/*****************************************************************************
 	 * Represents a single request extracted from the HAR.
 	 *****************************************************************************/
-	private static class HarRequestEntry {
+	private static class RequestEntry {
 		String method = "GET";
 		String url = "";
+		String urlHost = "";
+		String urlQuery = "";
+		String urlVariable = "";
+		String sanitizedName = "";
 		LinkedHashMap<String, String> headers = new LinkedHashMap<>();
 		LinkedHashMap<String, String> params = new LinkedHashMap<>();
 		String postData = "";
 		String resourceType = "";
+		
+		public static ArrayList<String> hostURLs = new ArrayList<>();
+		
+		
+		
+		/*********************************************
+		 * Returns the name prefixed with a 3 digit
+		 * index.
+		 *********************************************/
+		public String indexedName(int index) {
+			return PFRHttpConvertHar.threeDigits(index) + "_" + sanitizedName;
+		}
+			
+		
+		/*********************************************
+		 * Set the URL of this Request Entry.
+		 *********************************************/
+		public void setURL(String URL) {
+			
+			this.url = URL;
+			this.urlHost = PFR.Text.extractRegexFirst("(.*?//.*?)/", 0, URL);
+			this.urlQuery = PFR.Text.extractRegexFirst(".*?//.*?(/.*)", 0, URL);
+			setSanitizeName(urlQuery);
+			
+			if( ! hostURLs.contains(urlHost) ) {
+				
+			}
+		}
+		
+		/*****************************************************************************
+		 * Create a safe Java identifier from a URL.
+		 *
+		 * @param url url
+		 * @return sanitized name
+		 *****************************************************************************/
+		private void setSanitizeName(String urlQuery) {
+		
+			//-------------------------------
+			// Check Null
+			if (urlQuery == null) sanitizedName = "request";
+			
+			//-------------------------------
+			// Remove slashes
+			urlQuery = urlQuery.substring(1); // Remove slash at the beginning
+			if(urlQuery.endsWith("/")) {
+				urlQuery = urlQuery.substring(0, urlQuery.length()-1); // Remove slash at the end
+			}
+			
+			//-------------------------------
+			// Remove Special chars
+			String cleaned = urlQuery.replaceAll("[^a-zA-Z0-9]", "_");
+			if (cleaned.length() > 40) cleaned = cleaned.substring(0, 40);
+			if (cleaned.isEmpty()) cleaned = "request";
+			
+			if(cleaned.endsWith("_")) {
+				cleaned = cleaned.substring(0, cleaned.length()-1); // Remove _ at the end
+			}
+			
+			//-------------------------------
+			// Prefix with 3 digits
+			sanitizedName = cleaned;
+		}
 	}
 
 	/*****************************************************************************
