@@ -171,18 +171,11 @@ public class PFRHttpResponse {
 			//-----------------------------
 			// Pause before continuing
 			if(request.pauseMillisUpper > 0) {
-				
-				try {
-					if(request.pauseMillisLower == request.pauseMillisUpper) {
-						System.out.println("Pause: "+request.pauseMillisUpper+"ms");
-						Thread.sleep(request.pauseMillisUpper);
-					}else {
-						System.out.println("Pause: "+PFR.Random.longInRange(request.pauseMillisLower, request.pauseMillisUpper)+"ms");
-						Thread.sleep(PFR.Random.longInRange(request.pauseMillisLower, request.pauseMillisUpper));
-					}
-				} catch (InterruptedException e) {
-					Thread.currentThread().interrupt();
-					return;
+			
+				if(request.pauseMillisLower == request.pauseMillisUpper) {
+					HSR.pause(request.pauseMillisUpper);
+				}else {
+					HSR.pause(request.pauseMillisLower, request.pauseMillisUpper);
 				}
 				
 			}
