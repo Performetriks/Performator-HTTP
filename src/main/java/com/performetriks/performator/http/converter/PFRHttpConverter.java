@@ -55,12 +55,17 @@ import javax.swing.text.StyledDocument;
 import javax.swing.text.TabSet;
 import javax.swing.text.TabStop;
 
+import org.graalvm.polyglot.Value;
+
+import com.google.common.base.Strings;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.performetriks.performator.base.PFR;
 import com.performetriks.performator.http.PFRHttp;
+import com.performetriks.performator.http.scriptengine.PFRScripting;
+import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 
 /*****************************************************************************
  * A Swing application that loads a HAR (HTTP Archive) and generates Java code that uses
@@ -116,6 +121,7 @@ public class PFRHttpConverter extends JFrame {
 	private final JRadioButton rbSlaGlobal = new JRadioButton("Global", true);
 	private final JRadioButton rbSlaPerRequest = new JRadioButton("Per Request", false);
 	private final JRadioButton rbSlaNone = new JRadioButton("None", false);
+	private final JTextPane javascriptArea = new JTextPane();
 
 	// Parsed HAR model (in-memory)
 	private RequestModel requestModel = new RequestModel();
@@ -205,85 +211,85 @@ public class PFRHttpConverter extends JFrame {
 		// Middle: inputs in a scroll pane
 		JPanel inputs = new JPanel();
 		inputs.setLayout(new GridBagLayout());
-		GridBagConstraints c = new GridBagConstraints();
-		c.insets = new Insets(4, 4, 4, 4);
-		c.anchor = GridBagConstraints.WEST;
-		c.fill = GridBagConstraints.HORIZONTAL;
-		c.gridx = 0;
-		c.gridy = 0;
+		GridBagConstraints grid = new GridBagConstraints();
+		grid.insets = new Insets(4, 4, 4, 4);
+		grid.anchor = GridBagConstraints.WEST;
+		grid.fill = GridBagConstraints.HORIZONTAL;
+		grid.gridx = 0;
+		grid.gridy = 0;
 
 		//--------------------------------------
 		// Helper to add labeled components with tooltips (decorator)
 		BiConsumer<JComponent, String> addWithDesc = (comp, desc) -> {
 			comp.setToolTipText("<html>" + desc + "</html>");
-			c.gridx = 0;
-			inputs.add(comp instanceof JCheckBox ? comp : new JLabel(comp.getName() == null ? "" : comp.getName()), c);
+			grid.gridx = 0;
+			inputs.add(comp instanceof JCheckBox ? comp : new JLabel(comp.getName() == null ? "" : comp.getName()), grid);
 		};
 
 		//--------------------------------------
 		// We'll add rows manually with label and component
 		// Row: Exclude Redirects
 		int row = 0;
-		addLabeled(inputs, c,  "Exclude Redirects", cbExcludeRedirects,
+		addLabeled(inputs, grid,  "Exclude Redirects", cbExcludeRedirects,
 				"Checkbox to disable auto following HTTP redirects should be included in the script. " +
 						"If unchecked, the generated request builder will include .disableFollowRedirects().", row++);
-		addLabeled(inputs, c,  "Exclude CSS", cbExcludeCss,
+		addLabeled(inputs, grid,  "Exclude CSS", cbExcludeCss,
 				"Do not generate code for requests that have _resourceType=stylesheet.", row++);
-		addLabeled(inputs, c,  "Exclude Scripts", cbExcludeScripts,
+		addLabeled(inputs, grid,  "Exclude Scripts", cbExcludeScripts,
 				"Do not generate code for requests that have _resourceType=script.", row++);
-		addLabeled(inputs, c,  "Exclude Images", cbExcludeImages,
+		addLabeled(inputs, grid,  "Exclude Images", cbExcludeImages,
 				"Do not generate code for requests that have image types in _resourceType.", row++);
-		addLabeled(inputs, c,  "Exclude Fonts", cbExcludeFonts,
+		addLabeled(inputs, grid,  "Exclude Fonts", cbExcludeFonts,
 				"Do not generate code for requests that have _resourceType=font.", row++);
 
 		//--------------------------------------
 		// Exclude Regex
 		JLabel lblExcludeRegex = new JLabel("Exclude Regex (comma separated):");
 		lblExcludeRegex.setToolTipText("Excludes any request whose URL matches any of the provided regular expressions.");
-		c.gridx = 0;
-		c.gridy++;
-		inputs.add(lblExcludeRegex, c);
-		c.gridx = 1;
+		grid.gridx = 0;
+		grid.gridy++;
+		inputs.add(lblExcludeRegex, grid);
+		grid.gridx = 1;
 		tfExcludeRegex.setToolTipText("Comma separated regex list to exclude requests by URL. Default: .*.js,.*.css,.*.svg");
-		inputs.add(tfExcludeRegex, c);
+		inputs.add(tfExcludeRegex, grid);
 		row++;
 
 		//--------------------------------------
 		// Other toggles
-		addLabeled(inputs, c, "Make URL Variables", cbMakeURLVariable,
+		addLabeled(inputs, grid, "Make URL Variables", cbMakeURLVariable,
 				"If selected, the host part of the url will be extracted and put into a variable.", row++);
-		addLabeled(inputs, c, "Separate Responses", cbSeparateResponses,
+		addLabeled(inputs, grid, "Separate Responses", cbSeparateResponses,
 				"If selected, each response gets it's own PFRHttpResponse instance.", row++);
-		addLabeled(inputs, c, "Separate Requests", cbSeparateRequests,
+		addLabeled(inputs, grid, "Separate Requests", cbSeparateRequests,
 				"If selected, HTTP requests will be generated into separate methods (one per request) and called from execute().", row++);
-		addLabeled(inputs, c, "Separate Headers", cbSeparateHeaders,
+		addLabeled(inputs, grid, "Separate Headers", cbSeparateHeaders,
 				"If selected, headers will be emitted in separate getHeaders*() methods; otherwise they are inline as .header(...).", row++);
-		addLabeled(inputs, c, "Separate Parameters", cbSeparateParameters,
+		addLabeled(inputs, grid, "Separate Parameters", cbSeparateParameters,
 				"If selected, parameters will be emitted in separate getParams*() methods; otherwise they are inline as .param(...).", row++);
-		addLabeled(inputs, c, "Surround with try-catch", cbSurroundTryCatch,
+		addLabeled(inputs, grid, "Surround with try-catch", cbSurroundTryCatch,
 				"If selected, execute() will include try-catch around the requests.", row++);
 
 		//--------------------------------------
 		// Checks / placeholders
-		addLabeled(inputs, c, "Add checkBodyContains(\"\")"
+		addLabeled(inputs, grid, "Add checkBodyContains(\"\")"
 				, cbAddCheckBodyContains,
 				"Add a placeholder checkBodyContains(\"\") in the generated request builder chain."
 				, row++
 				);
 		
-		addLabeled(inputs, c, "Add checkStatusEquals(200)"
+		addLabeled(inputs, grid, "Add checkStatusEquals(200)"
 				, cbAddCheckStatusEquals,
 				"Add a placeholder checkStatusEquals(200) in the generated request builder chain."
 				, row++
 				);
 		
-		addLabeled(inputs, c, "Add measureSize(ByteSize.KB)"
+		addLabeled(inputs, grid, "Add measureSize(ByteSize.KB)"
 				, cbAddMeasureSize,
 				"Add a placeholder measureSize(ByteSize.KB) in the generated request builder chain."
 				, row++
 				);
 		
-		addLabeled(inputs, c, "Add throwOnFail()"
+		addLabeled(inputs, grid, "Add throwOnFail()"
 				, cbAddThrowOnFail,
 				"Add throwOnFail() after .send() in the generated chain."
 				, row++
@@ -291,43 +297,43 @@ public class PFRHttpConverter extends JFrame {
 
 		//--------------------------------------
 		// Other general options
-		addLabeled(inputs, c, "Debug Log On Fail", cbDebugLogOnFail,
+		addLabeled(inputs, grid, "Debug Log On Fail", cbDebugLogOnFail,
 				"If selected, PFRHttp.debugLogFail(true); will be emitted in initializeUser().", row++);
 
 		//--------------------------------------
 		// Numeric spinners
 		JLabel lblRespTO = new JLabel("Default Response Timeout (s) [0 = none]:");
 		lblRespTO.setToolTipText("If > 0 then PFRHttp.defaultResponseTimeout(Duration.ofSeconds(value)) will be added.");
-		c.gridx = 0;
-		c.gridy++;
-		inputs.add(lblRespTO, c);
-		c.gridx = 1;
-		inputs.add(spDefaultResponseTimeout, c);
+		grid.gridx = 0;
+		grid.gridy++;
+		inputs.add(lblRespTO, grid);
+		grid.gridx = 1;
+		inputs.add(spDefaultResponseTimeout, grid);
 
 		JLabel lblPause = new JLabel("Default Pause (ms) [0 = none]:");
 		lblPause.setToolTipText("If > 0 then PFRHttp.defaultPause(value) will be added.");
-		c.gridx = 0;
-		c.gridy++;
-		inputs.add(lblPause, c);
-		c.gridx = 1;
-		inputs.add(spDefaultPause, c);
+		grid.gridx = 0;
+		grid.gridy++;
+		inputs.add(lblPause, grid);
+		grid.gridx = 1;
+		inputs.add(spDefaultPause, grid);
 		
 		JLabel lblMaxNameLength = new JLabel("Max Name length:");
 		lblPause.setToolTipText("Defines the maximum length of the request name.");
-		c.gridx = 0;
-		c.gridy++;
-		inputs.add(lblMaxNameLength, c);
-		c.gridx = 1;
-		inputs.add(spMaxNameLength, c);
+		grid.gridx = 0;
+		grid.gridy++;
+		inputs.add(lblMaxNameLength, grid);
+		grid.gridx = 1;
+		inputs.add(spMaxNameLength, grid);
 
 		//--------------------------------------
 		// SLA radio buttons
 		JLabel lblSla = new JLabel("Default SLA:");
 		lblSla.setToolTipText("Global: add a DEFAULT_SLA constant. Per Request: add a .sla(...) per request. None: do nothing.");
-		c.gridx = 0;
-		c.gridy++;
-		inputs.add(lblSla, c);
-		c.gridx = 1;
+		grid.gridx = 0;
+		grid.gridy++;
+		inputs.add(lblSla, grid);
+		grid.gridx = 1;
 		JPanel pSla = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
 		ButtonGroup bgSla = new ButtonGroup();
 		bgSla.add(rbSlaGlobal);
@@ -336,7 +342,23 @@ public class PFRHttpConverter extends JFrame {
 		pSla.add(rbSlaGlobal);
 		pSla.add(rbSlaPerRequest);
 		pSla.add(rbSlaNone);
-		inputs.add(pSla, c);
+		inputs.add(pSla, grid);
+		
+		//------------------------------------
+		// Place inputs into scroll pane
+		JLabel lbljavascriptArea = new JLabel("Javascript Post Process:");
+		prepareTextarea(javascriptArea);
+		javascriptArea.setText("""
+				function postProcess(code){
+					return code;
+				}""");
+		lbljavascriptArea.setToolTipText("Used to adjust the generated code to your liking using javascript .");
+		grid.gridx = 0;
+		grid.gridy++;
+		inputs.add(lbljavascriptArea, grid);
+		grid.gridx = 1;
+		inputs.add(javascriptArea, grid);
+		
 
 		//------------------------------------
 		// Place inputs into scroll pane
@@ -354,21 +376,7 @@ public class PFRHttpConverter extends JFrame {
 		//outputArea.setWrapStyleWord(false);
 		//outputArea.setTabSize(4);
 		
-		FontMetrics fm = outputArea.getFontMetrics(outputArea.getFont());
-		int charWidth = fm.charWidth(' ');
-		int tabWidth = charWidth * 4; // 4-space tab
-
-		TabStop[] stops = new TabStop[20];
-		for (int i = 0; i < stops.length; i++) {
-		    stops[i] = new TabStop((i + 1) * tabWidth);
-		}
-		TabSet tabSet = new TabSet(stops);
-
-		SimpleAttributeSet attrs = new SimpleAttributeSet();
-		StyleConstants.setTabSet(attrs, tabSet);
-
-		StyledDocument doc = outputArea.getStyledDocument();
-		doc.setParagraphAttributes(0, doc.getLength(), attrs, false);
+		prepareTextarea(outputArea);
 		
 		outputArea.setText("// Load a HAR file to generate code...");
 		
@@ -388,6 +396,29 @@ public class PFRHttpConverter extends JFrame {
 
 		
 
+	}
+
+	/*****************************************************************************
+	 * Sets some default values for text areas.
+	 *
+	 * @param textarea
+	 *****************************************************************************/
+	private void prepareTextarea(JTextPane textarea) {
+		FontMetrics fm = textarea.getFontMetrics(textarea.getFont());
+		int charWidth = fm.charWidth(' ');
+		int tabWidth = charWidth * 4; // 4-space tab
+
+		TabStop[] stops = new TabStop[20];
+		for (int i = 0; i < stops.length; i++) {
+		    stops[i] = new TabStop((i + 1) * tabWidth);
+		}
+		TabSet tabSet = new TabSet(stops);
+
+		SimpleAttributeSet attrs = new SimpleAttributeSet();
+		StyleConstants.setTabSet(attrs, tabSet);
+
+		StyledDocument doc = textarea.getStyledDocument();
+		doc.setParagraphAttributes(0, doc.getLength(), attrs, false);
 	}
 
 	/*****************************************************************************
@@ -810,6 +841,7 @@ public class PFRHttpConverter extends JFrame {
 	 *****************************************************************************/
 	private void regenerateCode() {
 		String code = generateFullClassCode();
+		code = postProcessScript(code);
 		outputArea.setText(code);
 		outputArea.setCaretPosition(0);
 	}
@@ -1229,6 +1261,44 @@ import com.xresch.hsr.stats.HSRSLA;
 	}
 	
 
+	/******************************************************************************************************
+	 * 
+	 ******************************************************************************************************/
+	private String postProcessScript(String code) {
+		
+		String processedCode = code;
+		//------------------------------------
+		// Execute Javascript
+		String customJS = javascriptArea.getText();
+		if(customJS != null && customJS.contains("postProcess")) {
+			
+			System.out.println("Found script");
+			PFRScriptingContext jsEngine = PFRScripting.createJavascriptContext();
+			
+			try {
+				jsEngine.addScript("postprocess.js", javascriptArea.getText());
+				Value result = jsEngine.executeScript("postProcess(`"+processedCode+"`);");
+			
+			
+				System.out.println("Value"+result.asString());
+				
+				if(result != null) {
+					
+					String resultingCode = result.asString();
+					
+					if( ! Strings.isNullOrEmpty(resultingCode) ){
+						processedCode = resultingCode;
+					}
+				}
+			} catch (Throwable e) {
+				// return javascript errors
+				return "Javascript Error occured: \r\n"+e.getMessage();
+			}
+		}
+		
+		return processedCode;
+		
+	}
 	/*****************************************************************************
 	 * Escape string for embedding into generated Java source (simple).
 	 *
