@@ -8,6 +8,7 @@ import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.awt.event.ComponentAdapter;
@@ -40,6 +41,7 @@ import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.JTextPane;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -89,6 +91,20 @@ public class PFRHttpConverter extends JFrame {
 	// ---------------------------
 	// UI Elements (left / right)
 	// ---------------------------
+	private static final String PLACEHOLDER_CLASS_START = "{{class_start}}";
+	private static final String PLACEHOLDER_CLASS_END = "{{class_end}}";
+	private static final String PLACEHOLDER_INITIALIZE_START = "{{initialize_start}}";
+	private static final String PLACEHOLDER_INITIALIZE_END = "{{initialize_end}}";
+	private static final String PLACEHOLDER_EXECUTE_START = "{{execute_start}}";
+	private static final String PLACEHOLDER_EXECUTE_END = "{{execute_end}}";
+	private static final String PLACEHOLDER_TERMINATE_START = "{{terminate_start}}";
+	private static final String PLACEHOLDER_CATCH_BLOCK = "{{catch_block}}";
+	private static final String PLACEHOLDER_HEADERS_AFTER = "{{headers_after}}";
+	private static final String PLACEHOLDER_REQUEST_AFTER = "{{request_after}}";
+
+	// ---------------------------
+	// UI Elements (left / right)
+	// ---------------------------
 	private final JTextPane outputArea = new JTextPane();
 	private final JButton btnChooseHar = new JButton("Open HAR...");
 	private final JButton btnChoosePostman = new JButton("Open Postman...");
@@ -121,11 +137,14 @@ public class PFRHttpConverter extends JFrame {
 	private final JRadioButton rbSlaGlobal = new JRadioButton("Global", true);
 	private final JRadioButton rbSlaPerRequest = new JRadioButton("Per Request", false);
 	private final JRadioButton rbSlaNone = new JRadioButton("None", false);
-	private final JTextPane javascriptArea = new JTextPane();
+	private final JTextPane postprocessArea = new JTextPane();
+	private final JButton btnUpdate = new JButton("Update");
 
 	// Parsed HAR model (in-memory)
 	private RequestModel requestModel = new RequestModel();
 
+	private Color reallyDark = new Color(20, 20, 20);
+	private Color reallyLight = new Color(230, 230, 230);
 	/*****************************************************************************
 	 * Main entrypoint: create and show the UI.
 	 *
@@ -172,10 +191,7 @@ public class PFRHttpConverter extends JFrame {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		
-		Color reallyDark = new Color(20, 20, 20);
-		Color reallyLight = new Color(230, 230, 230);
-		
+				
         // tweak some UIManager colors
         UIManager.put("control", reallyDark);
         UIManager.put("text", reallyLight);
@@ -209,15 +225,17 @@ public class PFRHttpConverter extends JFrame {
 
 		//--------------------------------------
 		// Middle: inputs in a scroll pane
-		JPanel inputs = new JPanel();
-		inputs.setLayout(new GridBagLayout());
+		JPanel inputs = new JPanel(new GridBagLayout());
+		
 		GridBagConstraints grid = new GridBagConstraints();
 		grid.insets = new Insets(4, 4, 4, 4);
 		grid.anchor = GridBagConstraints.WEST;
 		grid.fill = GridBagConstraints.HORIZONTAL;
+		grid.weightx = 1.0; // do not grow bigger than parent container
 		grid.gridx = 0;
 		grid.gridy = 0;
 
+		
 		//--------------------------------------
 		// Helper to add labeled components with tooltips (decorator)
 		BiConsumer<JComponent, String> addWithDesc = (comp, desc) -> {
@@ -346,32 +364,80 @@ public class PFRHttpConverter extends JFrame {
 		
 		//------------------------------------
 		// Place inputs into scroll pane
-		JLabel lbljavascriptArea = new JLabel("Javascript Post Process:");
-		prepareTextarea(javascriptArea);
-		javascriptArea.setText("""
-				function postProcess(code){
-					return code;
-				}""");
-		lbljavascriptArea.setToolTipText("Used to adjust the generated code to your liking using javascript .");
-		grid.gridx = 0;
-		grid.gridy++;
-		inputs.add(lbljavascriptArea, grid);
-		grid.gridx = 1;
-		inputs.add(javascriptArea, grid);
-		
-
-		//------------------------------------
-		// Place inputs into scroll pane
 		JScrollPane scrollInputs = new JScrollPane(inputs);
+		scrollInputs.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		leftPanel.add(scrollInputs, BorderLayout.CENTER);
 		
+		
+		//########################################################################################
+		// Add Scripting Section
+		//########################################################################################
+		
+		//------------------------------------
+		// Add PostProcess
+		JLabel lblpostprocessArea = new JLabel("Javascript Post Process:");
+		lblpostprocessArea.setToolTipText("Used to adjust the generated code to your liking using javascript.");
 
+		prepareTextarea(postprocessArea);
+		postprocessArea.setText("""
+				function postProcess(code){
+					//code = code.replaceAll('%s', '') // insert at class start
+					//code = code.replaceAll('%s', '') // insert at class end
+					//code = code.replaceAll('%s', '') // insert at start of method initializeUser()
+					//code = code.replaceAll('%s', '') // insert at end of method initializeUser()
+					//code = code.replaceAll('%s', '') // insert at start of method execute()
+					//code = code.replaceAll('%s', '') // insert at end of method execute()
+					//code = code.replaceAll('%s', '') // insert at start of method terminate()
+					//code = code.replaceAll('%s', '') // insert in the catch block
+					//code = code.replaceAll('%s', 'headers.put("maHeader", "zeHeader");') // insert after headers
+					//code = code.replaceAll('%s', '') // insert after every request
+					return code;
+				}""".formatted(
+						  PLACEHOLDER_CLASS_START
+						, PLACEHOLDER_CLASS_END
+						, PLACEHOLDER_INITIALIZE_START
+						, PLACEHOLDER_INITIALIZE_END
+						, PLACEHOLDER_EXECUTE_START
+						, PLACEHOLDER_EXECUTE_END
+						, PLACEHOLDER_TERMINATE_START
+						, PLACEHOLDER_CATCH_BLOCK
+						, PLACEHOLDER_HEADERS_AFTER
+						, PLACEHOLDER_REQUEST_AFTER
+					)
+				);
+		
+		
+
+		JScrollPane scrollPostProcess = new JScrollPane(postprocessArea);
+		scrollPostProcess.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_ALWAYS);
+
+
+		JPanel scriptingPanel = new JPanel(new BorderLayout());
+		scriptingPanel.setBorder(new EmptyBorder(5, 5, 5, 5));
+		scriptingPanel.add(lblpostprocessArea,BorderLayout.NORTH);
+		scriptingPanel.add(scrollPostProcess, BorderLayout.CENTER);
+		scriptingPanel.add(btnUpdate, BorderLayout.SOUTH);
+		
+		leftPanel.add(scriptingPanel, BorderLayout.SOUTH);
+		
+		//------------------------------------
+		// Add Update Button
+		//JLabel lblscripting = new JLabel("");
+
+		//btnUpdate.setToolTipText("Used to adjust the generated code to your liking using javascript .");
+//		grid.gridx = 0;
+//		grid.gridy++;
+//		inputs.add(lblButtonUpdate, grid);
+//		grid.gridx = 1;
+//		inputs.add(btnUpdate, grid);
+		
+		//########################################################################################
+		// Add Output Section
+		//########################################################################################
+		
 		//------------------------------------
 		// Configure output area
-		outputArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
-		outputArea.setBackground(reallyDark);    
-		outputArea.setForeground(reallyLight);   
-		outputArea.setCaretColor(reallyLight);   
+
 		//outputArea.setLineWrap(false);
 		//outputArea.setWrapStyleWord(false);
 		//outputArea.setTabSize(4);
@@ -399,11 +465,17 @@ public class PFRHttpConverter extends JFrame {
 	}
 
 	/*****************************************************************************
-	 * Sets some default values for text areas.
+	 * Sets some default values for text areas used for code.
 	 *
 	 * @param textarea
 	 *****************************************************************************/
 	private void prepareTextarea(JTextPane textarea) {
+		textarea.setBackground(reallyDark);    
+		textarea.setForeground(reallyLight);   
+		textarea.setCaretColor(reallyLight);   
+		
+		textarea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+		
 		FontMetrics fm = textarea.getFontMetrics(textarea.getFont());
 		int charWidth = fm.charWidth(' ');
 		int tabWidth = charWidth * 4; // 4-space tab
@@ -485,7 +557,8 @@ public class PFRHttpConverter extends JFrame {
 		// File chooser
 		btnChooseHar.addActionListener(e -> chooseHarFile());
 		btnChoosePostman.addActionListener(e -> choosePostmanFile());
-
+		btnUpdate.addActionListener(e -> regenerateCode());
+		
 		// When user manually edits output, we don't need to regenerate; so no listener there.
 
 		// Window resize -> keep split 50/50; add component listener to recompute divider
@@ -840,10 +913,12 @@ public class PFRHttpConverter extends JFrame {
 	 * This method is called whenever any input is changed (or the HAR is loaded).
 	 *****************************************************************************/
 	private void regenerateCode() {
+		int currentPos = outputArea.getCaretPosition();
+		
 		String code = generateFullClassCode();
 		code = postProcessScript(code);
 		outputArea.setText(code);
-		outputArea.setCaretPosition(0);
+		outputArea.setCaretPosition(Math.min(currentPos, code.length()-1));
 	}
 
 	/*****************************************************************************
@@ -874,19 +949,23 @@ import com.performetriks.performator.http.ResponseFailedException;
 import com.xresch.hsr.stats.HSRExpression.Operator;
 import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
 import com.xresch.hsr.stats.HSRSLA;
+
+public class UsecaseConverted extends PFRUsecase {
 				
 			""");
-
+		
+		sb.append("\t"+PLACEHOLDER_CLASS_START+"\n");
+		
 		//--------------------------------------------------
 		// Class header & optional global SLA
 		boolean slaGlobal = rbSlaGlobal.isSelected();
 		if (slaGlobal) {
-			sb.append("public class UsecaseFromHar extends PFRUsecase {\n\n");
-			sb.append("\tprivate HSRSLA DEFAULT_SLA = new HSRSLA(HSRMetric.failrate, Operator.LT, 5);\n\n");
-		} else {
-			sb.append("public class UsecaseFromHar extends PFRUsecase {\n\n");
+			
+			sb.append("\n\tprivate HSRSLA DEFAULT_SLA = new HSRSLA(HSRMetric.failrate, Operator.LT, 5);\n\n");
 		}
-
+		
+		
+		
 		//--------------------------------------------------
 		// URL Variables
 		if(cbMakeURLVariable.isSelected()) {
@@ -903,6 +982,7 @@ import com.xresch.hsr.stats.HSRSLA;
 		sb.append("	 ***************************************************************************/\n");
 		sb.append("	@Override\n");
 		sb.append("	public void initializeUser() {\n");
+		sb.append("		"+PLACEHOLDER_INITIALIZE_START+"\n");
 		if ((Integer) spDefaultResponseTimeout.getValue() > 0) {
 			sb.append("		PFRHttp.defaultResponseTimeout(Duration.ofSeconds(").append(spDefaultResponseTimeout.getValue()).append("));\n");
 		}
@@ -912,6 +992,7 @@ import com.xresch.hsr.stats.HSRSLA;
 		if (cbDebugLogOnFail.isSelected()) {
 			sb.append("		PFRHttp.debugLogFail(true);\n");
 		}
+		sb.append("		"+PLACEHOLDER_INITIALIZE_END+"\n");
 		sb.append("	}\n\n");
 
 		// execute signature
@@ -920,6 +1001,7 @@ import com.xresch.hsr.stats.HSRSLA;
 		sb.append("	 ***************************************************************************/\n");
 		sb.append("	@Override\n");
 		sb.append("	public void execute() throws Throwable {\n");
+		sb.append("		"+PLACEHOLDER_EXECUTE_START+"\n");
 		sb.append("		PFRHttp.clearCookies();\n\n");
 
 		// try-catch around the body?
@@ -996,19 +1078,19 @@ import com.xresch.hsr.stats.HSRSLA;
 			
 			//----------------------------------
 			// Optional Success handling
-			sb.append("\r\n");
-			sb.append(postfix).append("// if (!").append(responseVar).append(".isSuccess()) { return; }\r\n");
+			//sb.append("\r\n");
+			//sb.append(postfix).append("// if (!").append(responseVar).append(".isSuccess()) { return; }\r\n");
 
 			idx++;
 		}
 
 		if (surroundTry) {
 			sb.append("		} catch(ResponseFailedException e) {\n");
-			sb.append("			// custom handling of request failures\n");
+			sb.append("			"+PLACEHOLDER_CATCH_BLOCK+"\n");
 			sb.append("			throw e;\n");
 			sb.append("		}\n");
 		}
-
+		sb.append("		"+PLACEHOLDER_EXECUTE_END+"\n");
 		sb.append("	}\n\n");
 
 		// If separateRequests, create separate methods
@@ -1039,6 +1121,7 @@ import com.xresch.hsr.stats.HSRSLA;
 					for (Map.Entry<String, String> e : req.headers.entrySet()) {
 						sb.append("		headers.put(\"").append(escape(e.getKey())).append("\", \"").append(escape(e.getValue())).append("\");\n");
 					}
+					sb.append("		"+PLACEHOLDER_HEADERS_AFTER+"\n");
 					sb.append("		return headers;\n");
 					sb.append("	}\n\n");
 					hidx++;
@@ -1072,10 +1155,10 @@ import com.xresch.hsr.stats.HSRSLA;
 		sb.append("	 ***************************************************************************/\n");
 		sb.append("	@Override\n");
 		sb.append("	public void terminate() {\n");
-		sb.append("		// nothing to clean up\n");
+		sb.append("		"+PLACEHOLDER_TERMINATE_START+"\n");
 		sb.append("	}\n\n");
-
-		sb.append("}\n");
+		sb.append("	"+PLACEHOLDER_CLASS_END+"\n");
+		sb.append("\n}\n");
 
 		return sb.toString();
 	}
@@ -1192,6 +1275,7 @@ import com.xresch.hsr.stats.HSRSLA;
 		//----------------------------------
 		// End
 		sb.append(postfix).append("\t;");
+		sb.append(postfix).append(PLACEHOLDER_REQUEST_AFTER+"\n");
 		
 		return sb.toString();
 	}
@@ -1269,18 +1353,14 @@ import com.xresch.hsr.stats.HSRSLA;
 		String processedCode = code;
 		//------------------------------------
 		// Execute Javascript
-		String customJS = javascriptArea.getText();
+		String customJS = postprocessArea.getText();
 		if(customJS != null && customJS.contains("postProcess")) {
-			
-			System.out.println("Found script");
+
 			PFRScriptingContext jsEngine = PFRScripting.createJavascriptContext();
 			
 			try {
-				jsEngine.addScript("postprocess.js", javascriptArea.getText());
+				jsEngine.addScript("postprocess.js", postprocessArea.getText());
 				Value result = jsEngine.executeScript("postProcess(`"+processedCode+"`);");
-			
-			
-				System.out.println("Value"+result.asString());
 				
 				if(result != null) {
 					
@@ -1296,6 +1376,21 @@ import com.xresch.hsr.stats.HSRSLA;
 			}
 		}
 		
+		//------------------------------------
+		// Remove Leftover placeholders
+		processedCode = 
+				processedCode.replace(PLACEHOLDER_CLASS_START, "") 
+					.replace( PLACEHOLDER_CLASS_END, "") 
+					.replace(PLACEHOLDER_INITIALIZE_START, "") 
+					.replace(PLACEHOLDER_INITIALIZE_END, "") 
+					.replace(PLACEHOLDER_EXECUTE_START, "") 
+					.replace(PLACEHOLDER_EXECUTE_END, "") 
+					.replace(PLACEHOLDER_TERMINATE_START, "") 
+					.replace(PLACEHOLDER_CATCH_BLOCK, "") 
+					.replace(PLACEHOLDER_HEADERS_AFTER, "") 
+					.replace(PLACEHOLDER_REQUEST_AFTER, "") 
+					;
+		
 		return processedCode;
 		
 	}
@@ -1306,8 +1401,14 @@ import com.xresch.hsr.stats.HSRSLA;
 	 * @return escaped string
 	 *****************************************************************************/
 	private String escape(String s) {
+		
 		if (s == null) return "";
-		return s.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r").replace("\"", "\\\"");
+		
+		return s.replace("\n", "\\n")
+				.replace("\r", "\\r")
+				.replace("\"", "\\\"")
+				.replace("\\", "\\\\")  // we also do double escaping of above, as we run this through the javascript engine
+				;
 	}
 
 	/*****************************************************************************
