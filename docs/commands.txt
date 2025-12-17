@@ -7,7 +7,7 @@ clean install -DcreateChecksum=true
 #########################################################
 # Signing for publishing
 #########################################################
-gpg -ab performator-http-1.0.0.jar
-gpg -ab performator-http-1.0.0-javadoc.jar
-gpg -ab performator-http-1.0.0-sources.jar
-gpg -ab performator-http-1.0.0.pom
+gpg -ab performator-http-1.1.1.jar
+gpg -ab performator-http-1.1.1-javadoc.jar
+gpg -ab performator-http-1.1.1-sources.jar
+gpg -ab performator-http-1.1.1.pom
