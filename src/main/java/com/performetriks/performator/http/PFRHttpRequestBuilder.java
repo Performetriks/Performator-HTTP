@@ -2,6 +2,7 @@ package com.performetriks.performator.http;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
@@ -29,7 +30,6 @@ import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.client5.http.protocol.RedirectStrategy;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
@@ -41,12 +41,11 @@ import org.ietf.jgss.GSSName;
 import org.ietf.jgss.Oid;
 
 import com.performetriks.performator.http.PFRHttp.PFRHttpAuthMethod;
-import com.xresch.hsr.stats.HSRSLA;
 import com.xresch.hsr.stats.HSRExpression.Operator;
 import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
+import com.xresch.hsr.stats.HSRSLA;
 import com.xresch.hsr.utils.ByteSize;
 import com.xresch.hsr.utils.HSRText.CheckType;
-import com.xresch.hsr.utils.HSRTime.HSRTimeUnit;
 
 /*******************************************************************************************************
  * 
@@ -78,6 +77,9 @@ public class PFRHttpRequestBuilder {
 	long responseTimeoutMillis = PFRHttp.defaultResponseTimeout(); 
 	long pauseMillisLower = PFRHttp.defaultPauseLower(); 
 	long pauseMillisUpper = PFRHttp.defaultPauseUpper(); 
+	
+	Integer rangeValue = null;
+	Integer rangeInitial = null;
 	
 	HSRSLA sla = null;
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
@@ -197,6 +199,22 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
+	 * Toggles the measurement of values with ranges.
+	 * Will put the measured values into buckets for easier analysis. 
+	 * 
+	 * @param rangeValue the current values used to determine the range
+	 * @param rangeInitial the initial range
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder measureRange(int rangeValue, int rangeInitial) {
+		
+		this.rangeValue = rangeValue;
+		this.rangeInitial = rangeInitial;
+		
+		return this;
+		
+	}
+	
+	/***************************************************************************
 	 * Toggles the measurement of response size after unzipping.
 	 * This will measure the actual size of the received content in UTF8 encoding. 
 	 * 
@@ -309,6 +327,18 @@ public class PFRHttpRequestBuilder {
 	/***************************************************************************
 	 * Add a pause after the response was received.
 	 ***************************************************************************/
+	public PFRHttpRequestBuilder pause(Duration duration) {
+		
+		long millis = duration.toMillis();
+		
+		this.pauseMillisLower = millis;
+		this.pauseMillisUpper = millis;
+		
+		return this;
+	}
+	/***************************************************************************
+	 * Add a pause after the response was received.
+	 ***************************************************************************/
 	public PFRHttpRequestBuilder pause(long pauseMillis) {
 		this.pauseMillisLower = pauseMillis;
 		this.pauseMillisUpper = pauseMillis;
@@ -330,6 +360,15 @@ public class PFRHttpRequestBuilder {
 		}
 		return this;
 	}
+	
+	/***************************************************************************
+	 * Add a random pause in milliseconds that lies in between the specified
+	 * range.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder pause(Duration lowerDuration, Duration upperDuration) {
+		return pause(lowerDuration.toMillis(), upperDuration.toMillis());
+	}
+	
 	
 	/***************************************************************************
 	 * Builds the url with parameters for this request builder and returns

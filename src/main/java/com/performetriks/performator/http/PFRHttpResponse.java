@@ -120,7 +120,18 @@ public class PFRHttpResponse {
 				record = HSR.end(isSuccess())
 							.code(""+status)
 							; 
-
+				
+				//--------------------------
+				// Measure Range
+				if(request.rangeInitial != null) {
+					HSR.addMetricRanged(
+							  record.name()
+							, record.value()
+							, request.rangeValue
+							, request.rangeInitial
+						);
+				}
+				
 				//--------------------------
 				// Measure Size
 				if(request.measuredSize != null) {
@@ -220,7 +231,6 @@ public class PFRHttpResponse {
 		builder.append(p+"---------------- RESPONSE ----------------");
 		builder.append(p+"Status:     "+this.getStatus());
 		builder.append(p+"Checks OK:  "+this.checksSuccessful()).append(", HasError: "+this.hasError()).append( ( (errorMessage == null) ? "" : ", Error: " + errorMessage.replace("\n", p)) );
-		builder.append(p+"Duration:   "+this.getDuration());
 		builder.append(p+"Headers:    "+this.getHeadersAsJson().toString());
 		builder.append(p+"Body:"+ ( (body == null) ? "" : p + body.replace("\n", p)) );
 		builder.append("\n###################################################################################");
@@ -475,6 +485,26 @@ public class PFRHttpResponse {
 		}
 		
 		return -1;
+	}
+	
+	/******************************************************************************************************
+	 * Returns the name set for this record, or null if not found.
+	 ******************************************************************************************************/
+	public String getName() {
+		
+		if(record != null) {
+			return record.name();
+		}
+		
+		return null;
+	}
+	
+	/******************************************************************************************************
+	 * Returns the record of this response.
+	 ******************************************************************************************************/
+	public HSRRecord getRecord() {
+		
+		return record;
 	}
 	
 	/******************************************************************************************************
