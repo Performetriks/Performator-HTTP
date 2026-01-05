@@ -78,8 +78,8 @@ public class PFRHttpRequestBuilder {
 	long pauseMillisLower = PFRHttp.defaultPauseLower(); 
 	long pauseMillisUpper = PFRHttp.defaultPauseUpper(); 
 	
-	Integer rangeValue = null;
-	Integer rangeInitial = null;
+	record Range (String suffix, int rangeValue, int rangeInitial) {};
+	ArrayList<Range> ranges;
 	
 	HSRSLA sla = null;
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
@@ -202,13 +202,29 @@ public class PFRHttpRequestBuilder {
 	 * Toggles the measurement of values with ranges.
 	 * Will put the measured values into buckets for easier analysis. 
 	 * 
-	 * @param rangeValue the current values used to determine the range
-	 * @param rangeInitial the initial range
+	 * @param value the current values used to determine the range
+	 * @param initial the initial range
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder measureRange(int rangeValue, int rangeInitial) {
+	public PFRHttpRequestBuilder measureRange(int value, int initial) {
 		
-		this.rangeValue = rangeValue;
-		this.rangeInitial = rangeInitial;
+		return measureRange(null, value, initial);
+		
+	}
+	/***************************************************************************
+	 * Toggles the measurement of values with ranges.
+	 * Will put the measured values into buckets for easier analysis. 
+	 * 
+	 * @param rangeSuffix the suffix that should be added to the metric name
+	 * @param value the current value used to determine the range
+	 * @param initial the initial range
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder measureRange(String suffix, int value, int initial) {
+		
+		if(ranges == null) {
+			ranges = new ArrayList<>();
+		}
+		
+		ranges.add( new Range(suffix, value, initial) );
 		
 		return this;
 		

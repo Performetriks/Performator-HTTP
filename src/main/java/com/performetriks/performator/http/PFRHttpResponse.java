@@ -25,6 +25,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.performetriks.performator.base.PFR;
 import com.performetriks.performator.base.PFRContext;
+import com.performetriks.performator.http.PFRHttpRequestBuilder.Range;
 import com.xresch.hsr.base.HSR;
 import com.xresch.hsr.stats.HSRRecord;
 import com.xresch.hsr.stats.HSRRecord.HSRRecordStatus;
@@ -123,13 +124,11 @@ public class PFRHttpResponse {
 				
 				//--------------------------
 				// Measure Range
-				if(request.rangeInitial != null) {
-					HSR.addMetricRanged(
-							  record.name()
-							, record.value()
-							, request.rangeValue
-							, request.rangeInitial
-						);
+				if(request.ranges != null) {
+					
+					for(Range range : request.ranges) {
+						this.measureRange(range.suffix(), range.rangeValue(), range.rangeInitial());
+					}
 				}
 				
 				//--------------------------
@@ -297,6 +296,37 @@ public class PFRHttpResponse {
 	 ******************************************************************************************************/
 	public boolean checksSuccessful() {
 		return checksSuccessful;
+	}
+	
+	/******************************************************************************************************
+	 * Adds a measure for a specified Range.
+	 * Will put the measured values into buckets for easier analysis. 
+	 * 
+	 * @param value the current value used to determine the range
+	 * @param initial the initial range
+	 ******************************************************************************************************/
+	public void measureRange(int rangeValue, int rangeInitial) {
+		measureRange(null, rangeValue, rangeInitial);
+	}
+		
+	/******************************************************************************************************
+	 * Adds a measure for a specified Range.
+	 * Will put the measured values into buckets for easier analysis. 
+	 * 
+	 * @param rangeSuffix the suffix that should be added to the metric name
+	 * @param value the current value used to determine the range
+	 * @param initial the initial range
+	 ******************************************************************************************************/
+	public void measureRange(String suffix, int rangeValue, int rangeInitial) {
+		
+		String rangeName = record.name() + (suffix != null ? suffix : "" );
+		
+		HSR.addMetricRanged(
+				  rangeName
+				, record.value()
+				, rangeValue
+				, rangeInitial
+			);
 	}
 	
 	/******************************************************************************************************
