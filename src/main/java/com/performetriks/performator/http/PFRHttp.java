@@ -78,6 +78,12 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> keystorePW = new InheritableThreadLocal<>();
 	private static InheritableThreadLocal<String> keystoreManagerPW = new InheritableThreadLocal<>();
 	
+	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
+		@Override
+	    protected BasicCookieStore initialValue() {
+	        return new BasicCookieStore();
+	    }
+	};
 	
 	private static InheritableThreadLocal<Long> defaultResponseTimeoutMillis =  new InheritableThreadLocal<>() { 
 		@Override
@@ -87,41 +93,41 @@ public class PFRHttp {
 	    }
 	};
 	
-	static InheritableThreadLocal<Long> defaultPauseMillisLower = new InheritableThreadLocal<>() { 
+	private static InheritableThreadLocal<Long> defaultPauseMillisLower = new InheritableThreadLocal<>() { 
 		@Override
 	    protected Long initialValue() {
 	        return 0L;
 	    }
 	};
 	
-	static InheritableThreadLocal<Long> defaultPauseMillisUpper = new InheritableThreadLocal<>() { 
+	private static InheritableThreadLocal<Long> defaultPauseMillisUpper = new InheritableThreadLocal<>() { 
 		@Override
 	    protected Long initialValue() {
 	        return 0L;
 	    }
 	};
 	
-	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
-		@Override
-	    protected BasicCookieStore initialValue() {
-	        return new BasicCookieStore();
-	    }
-	};
 			
-	static InheritableThreadLocal<Boolean> debugLogAll = new InheritableThreadLocal<>() { 
+	private static InheritableThreadLocal<Boolean> debugLogAll = new InheritableThreadLocal<>() { 
 		@Override
 	    protected Boolean initialValue() {
 	        return false;
 	    }
 	};
 	
-	static InheritableThreadLocal<Boolean> debugLogFail = new InheritableThreadLocal<>() { 
+	private static InheritableThreadLocal<Boolean> debugLogFail = new InheritableThreadLocal<>() { 
 		@Override
 	    protected Boolean initialValue() {
 	        return false;
 	    }
 	};
 	
+	private static InheritableThreadLocal<Boolean> throwOnFail = new InheritableThreadLocal<>() { 
+		@Override
+	    protected Boolean initialValue() {
+	        return false;
+	    }
+	};
 		
 	
 	public enum PFRHttpAuthMethod{
@@ -144,6 +150,7 @@ public class PFRHttp {
 	}
 
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Enable debug logs for the current user thread for all request, regardless if they are successful
 	 * or failing.
 	 ******************************************************************************************************/
@@ -152,6 +159,15 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * @return boolean setting value of debugLogAll
+	 ******************************************************************************************************/
+	public static boolean debugLogAll() {
+		return PFRHttp.debugLogAll.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Enable debug logs for the current user thread for failing requests.
 	 ******************************************************************************************************/
 	public static void debugLogFail(boolean enable) {
@@ -159,6 +175,35 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * @return boolean setting value of debugLogAll
+	 ******************************************************************************************************/
+	public static boolean debugLogFail() {
+		return PFRHttp.debugLogFail.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Set the default value of throwOnFail.
+	 * If true, requests that fail will throw a ResponseFailedException.
+	 * 
+	 ******************************************************************************************************/
+	public static void defaultThrowOnFail(boolean enable) {
+		PFRHttp.throwOnFail.set(enable);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Get the default value of throwOnFail.
+	 * If true, requests that fail will throw a ResponseFailedException.
+	 * 
+	 ******************************************************************************************************/
+	public static boolean defaultThrowOnFail() {
+		return PFRHttp.throwOnFail.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Set the default response timeout used for all the requests of the current user(thread).
 	 ******************************************************************************************************/
 	public static void defaultResponseTimeout(long millis) {
@@ -166,6 +211,7 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Returns the default response timeout for all the requests of the current user(thread).
 	 ******************************************************************************************************/
 	public static long defaultResponseTimeout() {
@@ -173,6 +219,7 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Set the default pause used for all the requests of the current user(thread).
 	 ******************************************************************************************************/
 	public static void defaultPause(long millis) {
@@ -181,6 +228,7 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Set the default pause used for all the requests of the current user(thread).
 	 ******************************************************************************************************/
 	public static void defaultPause(long lowerMillis, long upperMillis) {
@@ -189,6 +237,7 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Returns the default pause lower range.
 	 ******************************************************************************************************/
 	public static long defaultPauseLower() {
@@ -196,6 +245,7 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Returns the default pause upper range.
 	 ******************************************************************************************************/
 	public static long defaultPauseUpper() {

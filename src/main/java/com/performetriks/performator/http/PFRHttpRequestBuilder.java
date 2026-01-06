@@ -64,6 +64,7 @@ public class PFRHttpRequestBuilder {
 	
 	boolean autoFailOnHTTPErrors = true;
 	boolean disableFollowRedirects = false;
+	
 	ByteSize measuredSize = null;
 	
 	String metricName = null;
@@ -74,9 +75,10 @@ public class PFRHttpRequestBuilder {
 	String requestBodyContentType = "plain/text; charset=UTF-8";
 	private boolean autoCloseClient = true;
 	
-	long responseTimeoutMillis = PFRHttp.defaultResponseTimeout(); 
-	long pauseMillisLower = PFRHttp.defaultPauseLower(); 
-	long pauseMillisUpper = PFRHttp.defaultPauseUpper(); 
+	long responseTimeoutMillis 	= PFRHttp.defaultResponseTimeout(); 
+	long pauseMillisLower 		= PFRHttp.defaultPauseLower(); 
+	long pauseMillisUpper 		= PFRHttp.defaultPauseUpper(); 
+	boolean throwOnFail 		= PFRHttp.defaultThrowOnFail();
 	
 	record Range (String suffix, int rangeValue, int rangeInitial) {};
 	ArrayList<Range> ranges;
@@ -214,7 +216,7 @@ public class PFRHttpRequestBuilder {
 	 * Toggles the measurement of values with ranges.
 	 * Will put the measured values into buckets for easier analysis. 
 	 * 
-	 * @param rangeSuffix the suffix that should be added to the metric name
+	 * @param suffix the suffix that should be added to the metric name
 	 * @param value the current value used to determine the range
 	 * @param initial the initial range
 	 ***************************************************************************/
@@ -352,6 +354,15 @@ public class PFRHttpRequestBuilder {
 		
 		return this;
 	}
+	
+	/***************************************************************************
+	 * Overrides the default set with PFRHttp.defaultThrowOnFail().
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder throwOnFail(boolean enable) {
+		this.throwOnFail = enable;
+		return this;
+	}
+	
 	/***************************************************************************
 	 * Add a pause after the response was received.
 	 ***************************************************************************/
@@ -1003,7 +1014,12 @@ public class PFRHttpRequestBuilder {
 				return response;
 				
 			}
-		} catch (Throwable e) {
+		} catch (Throwable e) { 
+			
+			// do not handle ResponseFailedException
+			if(e instanceof ResponseFailedException) {
+				throw (ResponseFailedException)e;
+			}
 			
 			PFRHttp.logger.error("Exception while sending HTTP Request: "+e.getMessage(), e);
 		} 

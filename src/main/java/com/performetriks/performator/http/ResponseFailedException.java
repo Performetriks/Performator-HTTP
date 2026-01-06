@@ -8,7 +8,7 @@ package com.performetriks.performator.http;
  * @author Reto Scheiwiller
  * 
  ***************************************************************************/
-public class ResponseFailedException extends Throwable {
+public class ResponseFailedException extends RuntimeException {
 
 	private static final long serialVersionUID = 1L;
 	

@@ -121,7 +121,23 @@ public class PFRHttpResponse {
 				record = HSR.end(isSuccess())
 							.code(""+status)
 							; 
+			}
+			
+			//--------------------------
+			// Do Checks
+			for(PFRHttpCheck check : request.checksList) {
 				
+				checksSuccessful &= check.check(this);
+				
+				if(!checksSuccessful) { 
+					record.status(HSRRecordStatus.Failed); //override status
+					break;
+				}
+			}
+			
+			//--------------------------
+			// Additional Measurements
+			if(metric != null) {
 				//--------------------------
 				// Measure Range
 				if(request.ranges != null) {
@@ -136,19 +152,8 @@ public class PFRHttpResponse {
 				if(request.measuredSize != null) {
 					BigDecimal bodySize = getBodySize(request.measuredSize);
 					String suffix = "-Size" + ( (request.measuredSize != ByteSize.B) ? request.measuredSize.toString() : "Bytes" );
-					HSR.addGauge(metric+suffix, bodySize);
-				}
-			}
-			
-			//--------------------------
-			// Do Checks
-			for(PFRHttpCheck check : request.checksList) {
-				
-				checksSuccessful &= check.check(this);
-				
-				if(!checksSuccessful) { 
-					record.status(HSRRecordStatus.Failed); //override status
-					break;
+					HSR.addGauge(metric+suffix, bodySize)
+						.status(record.status());
 				}
 			}
 				
@@ -168,15 +173,17 @@ public class PFRHttpResponse {
 			
 		}finally {
 			
-			if( PFRHttp.debugLogAll.get()
-			|| (PFRHttp.debugLogFail.get() && !this.isSuccess())
+			//-----------------------------
+			// Write Debug Log
+			if( PFRHttp.debugLogAll()
+			|| (PFRHttp.debugLogFail() && !this.isSuccess())
 			){
 				printDebugLog();
 			}
-							
-			if(autoCloseClient) {
-				close();
-			}
+				
+			//-----------------------------
+			// Close Client
+			if(autoCloseClient) { close();}
 			
 			//-----------------------------
 			// Pause before continuing
@@ -189,6 +196,11 @@ public class PFRHttpResponse {
 				}
 				
 			}
+			
+			//-----------------------------
+			// Default Throw on Fail
+			if(request.throwOnFail) { this.throwOnFail(); }
+			
 		}
 	}
 	
@@ -280,6 +292,8 @@ public class PFRHttpResponse {
 	/******************************************************************************************************
 	 * If the response has an error, this method will throw an exception. This can be used to work with 
 	 * try-catch mechanisms to simplify code structures.
+	 * Calling this method directly will ignore the setting PFRHttp.defaultThrowOnFail().
+	 * 
 	 * The response that failed can be retrieved with ResponseFailedException.getResponse().
 	 ******************************************************************************************************/
 	public PFRHttpResponse throwOnFail() throws ResponseFailedException {
@@ -326,7 +340,9 @@ public class PFRHttpResponse {
 				, record.value()
 				, rangeValue
 				, rangeInitial
-			);
+			)
+			.status(record.status())
+		;
 	}
 	
 	/******************************************************************************************************
