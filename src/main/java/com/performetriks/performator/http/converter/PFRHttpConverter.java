@@ -590,7 +590,12 @@ public class PFRHttpConverter extends JFrame {
 			try {
 				parseHarFile(f);
 			} catch (Exception ex) {
-				JOptionPane.showMessageDialog(this, "Failed to parse HAR: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(
+						  this
+						, "Failed to parse HAR: " + ex.getMessage()+": \r\n"+PFR.Text.stacktraceToString(ex)
+						, "Error"
+						, JOptionPane.ERROR_MESSAGE
+					);
 				requestModel = new RequestModel(); // reset model
 			}
 			regenerateCode();
@@ -611,7 +616,12 @@ public class PFRHttpConverter extends JFrame {
 			try {
 				parsePostmanCollection(f);
 			} catch (Exception ex) {
-				JOptionPane.showMessageDialog(this, "Failed to parse Postman Collection: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+				JOptionPane.showMessageDialog(
+							this
+							, "Failed to parse Postman Collection: "  + ex.getMessage()+": \r\n"+PFR.Text.stacktraceToString(ex)
+							, "Error"
+							, JOptionPane.ERROR_MESSAGE
+							);
 				requestModel = new RequestModel(); // reset model
 			}
 			regenerateCode();

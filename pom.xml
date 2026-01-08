@@ -19,7 +19,7 @@
 		<otel.version>1.49.0</otel.version>
 		
 		<skipJavadoc>false</skipJavadoc>
-		
+		<skipSigning>false</skipSigning>
 	</properties>
 	
 		<!-- ================= LICENSES ================== -->
@@ -181,6 +181,14 @@
 				</configuration>
 			</plugin>
 			
+			<!-- ================= INSTALL ================== -->
+			<plugin>
+			  <artifactId>maven-install-plugin</artifactId>
+			  <version>2.3.1</version>
+			  <configuration>
+			    <createChecksum>true</createChecksum>
+			  </configuration>
+			</plugin>
 			
 			<!-- ================= SOURCES ================== -->
 			<plugin>
@@ -218,6 +226,32 @@
 				</configuration>
 			</plugin>
 
+			<!-- ================= GPG SIGN ================== -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-gpg-plugin</artifactId>
+				<version>1.6</version>
+				<executions>
+					<execution>
+						<id>sign-artifacts</id>
+						<phase>verify</phase>
+						<goals>
+							<goal>sign</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<skip>${skipSigning}</skip>
+					<gpgArguments>
+						<arg>--pinentry-mode</arg>
+						<arg>loopback</arg>
+						<arg>--status-fd</arg>
+						<arg>--yes</arg>
+						<arg>--always-trust</arg>
+
+					</gpgArguments>
+				</configuration>
+			</plugin>
 			
 		</plugins>
 
