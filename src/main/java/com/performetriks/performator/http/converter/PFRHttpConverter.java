@@ -145,6 +145,8 @@ public class PFRHttpConverter extends JFrame {
 
 	private Color reallyDark = new Color(20, 20, 20);
 	private Color reallyLight = new Color(230, 230, 230);
+	
+	private static final String PATH_SEPARATOR = ".";
 	/*****************************************************************************
 	 * Main entrypoint: create and show the UI.
 	 *
@@ -592,7 +594,8 @@ public class PFRHttpConverter extends JFrame {
 			} catch (Exception ex) {
 				JOptionPane.showMessageDialog(
 						  this
-						, "Failed to parse HAR: " + ex.getMessage()+": \r\n"+PFR.Text.stacktraceToString(ex)
+						, "Failed to parse HAR: " + ex.getMessage()+": \r\n"
+								+PFR.Text.stacktraceToString(ex).replace("<br/>", "\r\n")
 						, "Error"
 						, JOptionPane.ERROR_MESSAGE
 					);
@@ -618,7 +621,8 @@ public class PFRHttpConverter extends JFrame {
 			} catch (Exception ex) {
 				JOptionPane.showMessageDialog(
 							this
-							, "Failed to parse Postman Collection: "  + ex.getMessage()+": \r\n"+PFR.Text.stacktraceToString(ex)
+							, "Failed to parse Postman Collection: "  + ex.getMessage()+": \r\n"
+									+PFR.Text.stacktraceToString(ex).replace("<br/>", "\r\n")
 							, "Error"
 							, JOptionPane.ERROR_MESSAGE
 							);
@@ -769,7 +773,7 @@ public class PFRHttpConverter extends JFrame {
 	        // top-level "item" array
 	        if (root.has("item") && root.get("item").isJsonArray()) {
 	            JsonArray arr = root.getAsJsonArray("item");
-	            parseItemArray(arr, entries);
+	            parseItemArray(arr, entries, "");
 	        }
 
 	        requestModel = new RequestModel(entries);
@@ -779,7 +783,7 @@ public class PFRHttpConverter extends JFrame {
 	/*****************************************************************************
 	 * Recursively process any "item" array in a Postman collection.
 	 *****************************************************************************/
-	private void parseItemArray(JsonArray items, List<RequestEntry> entries) {
+	private void parseItemArray(JsonArray items, List<RequestEntry> entries, String path) {
 
 	    for (JsonElement el : items) {
 	        if (!el.isJsonObject()) continue;
@@ -794,7 +798,11 @@ public class PFRHttpConverter extends JFrame {
 	            // -------------------------
 	            // Name
 	            hre.name = itemObj.has("name") ? itemObj.get("name").getAsString() : "";
-
+	          	
+	            if(!path.isBlank()) { 
+	          		hre.name = path + PATH_SEPARATOR + hre.name; 
+	          	}
+	            
 	            // -------------------------
 	            // Method
 	            hre.method = req.has("method") ? req.get("method").getAsString() : "GET";
@@ -810,10 +818,19 @@ public class PFRHttpConverter extends JFrame {
 	            if (req.has("header") && req.get("header").isJsonArray()) {
 	                JsonArray hdrs = req.getAsJsonArray("header");
 	                for (JsonElement h : hdrs) {
-	                    if (!h.isJsonObject()) continue;
+	                    
+	                	if (!h.isJsonObject()) continue;
+	                   
 	                    JsonObject ho = h.getAsJsonObject();
-	                    String name = ho.has("key") ? ho.get("key").getAsString() : "";
-	                    String value = ho.has("value") ? ho.get("value").getAsString() : "";
+	                    
+	                    String name = (ho.has("key") && ! ho.get("key").isJsonNull() ) 
+	                    				? ho.get("key").getAsString() 
+	                    				: "";
+	                    
+	                    String value = (ho.has("value") && ! ho.get("value").isJsonNull() ) 
+	                    				? ho.get("value").getAsString() 
+	                    				: "";
+	                    
 	                    if (!name.isEmpty()) hre.headers.put(name, value);
 	                }
 	            }
@@ -839,7 +856,18 @@ public class PFRHttpConverter extends JFrame {
 	        // -------------------------
 	        // Recurse deeper if nested "item" exists
 	        if (itemObj.has("item") && itemObj.get("item").isJsonArray()) {
-	            parseItemArray(itemObj.getAsJsonArray("item"), entries);
+	        	
+	        	if( itemObj.has("name") ) {
+	        		String newPath = (path.isBlank())
+	        				? itemObj.get("name").getAsString() 
+	        				: path + PATH_SEPARATOR + itemObj.get("name").getAsString();
+	        		
+	        		parseItemArray(itemObj.getAsJsonArray("item"), entries, newPath);
+	        	}else {
+	        		parseItemArray(itemObj.getAsJsonArray("item"), entries, path);
+	        	}
+		          	
+	            
 	        }
 	    }
 	}
@@ -849,7 +877,7 @@ public class PFRHttpConverter extends JFrame {
 	 *****************************************************************************/
 	private String extractPostmanURL(JsonObject postmanItem) {
 
-	    if (!postmanItem.has("url")) return "";
+	    if ( !postmanItem.has("url") ) return "";
 
 	    JsonElement uel = postmanItem.get("url");
 
@@ -862,27 +890,35 @@ public class PFRHttpConverter extends JFrame {
 
 	    StringBuilder sb = new StringBuilder();
 
+	    //------------------------------
 	    // protocol://
-	    if (urlObj.has("protocol"))
+	    if (urlObj.has("protocol")) {
 	        sb.append(urlObj.get("protocol").getAsString()).append("://");
-
+	    }
+	    
+	    //------------------------------
 	    // host segments
 	    if (urlObj.has("host") && urlObj.get("host").isJsonArray()) {
 	        JsonArray hostArr = urlObj.getAsJsonArray("host");
+	        
 	        for (int i = 0; i < hostArr.size(); i++) {
-	            if (i > 0) sb.append(".");
+	            
+	        	if (i > 0) { sb.append("."); }
+	            
 	            sb.append(hostArr.get(i).getAsString());
 	        }
 	    }
-
+	    
+	    //------------------------------
 	    // path segments
 	    if (urlObj.has("path") && urlObj.get("path").isJsonArray()) {
 	        for (JsonElement p : urlObj.getAsJsonArray("path")) {
 	            sb.append("/").append(p.getAsString());
 	        }
 	    }
-
-	    // query parameters (append later)
+	    
+	    //------------------------------
+	    // Return host string
 	    return sb.toString();
 	}
 
@@ -907,8 +943,14 @@ public class PFRHttpConverter extends JFrame {
 	            if (!q.isJsonObject()) continue;
 
 	            JsonObject qo = q.getAsJsonObject();
-	            String key = qo.has("key") ? qo.get("key").getAsString() : null;
-	            String val = qo.has("value") ? qo.get("value").getAsString() : "";
+	            
+	            String key = (qo.has("key") && ! qo.get("key").isJsonNull() ) 
+        				? qo.get("key").getAsString() 
+        				: "";
+        
+	            String val = (qo.has("value") && ! qo.get("value").isJsonNull() ) 
+        				? qo.get("value").getAsString() 
+        				: "";
 
 	            if (key != null) req.params.put(key, val);
 	        }
@@ -1036,15 +1078,14 @@ public class UsecaseConverted extends PFRUsecase {
 			sb.append(postfix).append("PFRHttpResponse r = null;\r\n");
 		}
 		
-		int idx = 0;
+		int index = 0;
 		
 		//RequestEntry previous = null;
 		for (RequestEntry req : requests) {
 			
 			String responseVar = "r";
 
-			String name = req.indexedName(idx);
-						
+	
 			//----------------------------------------
 			// Header
 			sb.append(postfix).append("//---------------------------------------------");
@@ -1052,38 +1093,21 @@ public class UsecaseConverted extends PFRUsecase {
 			sb.append(postfix).append("//---------------------------------------------");
 			
 			//----------------------------------------
-			// Check Skip Redirects
-			// this won't work as we don't know if the order in the HAR file is correct
-//			if (cbExcludeRedirects.isSelected() 
-//			&& previous != null
-//			&& (   previous.status == 301	// Moved
-//				|| previous.status == 302	// Found
-//				|| previous.status == 307	// Temporary Redirect
-//				|| previous.status == 308	// Permanent Redirect
-//			    )
-//			){		
-//				sb.append(postfix).append("// HTTP "+previous.status+" - Redirect Excluded: "+req.url+"\n");
-//				previous = req;
-//				continue;
-//			}
-//			
-//			previous = req;
-			
-			//----------------------------------------
 			// Print Variable
 			if( ! cbSeparateResponses.isSelected() ) {
 				sb.append(postfix).append("r = ");
 			}else {
-				responseVar += threeDigits(idx);
+				responseVar += threeDigits(index);
 				sb.append(postfix).append("PFRHttpResponse ").append(responseVar).append(" = ");
 			}
 			
 			//----------------------------------------
 			// Separate Requests
 			if (separateRequests) {
+				String name = req.indexedName(index, true);
 				sb.append("r"+name).append("();");
 			} else {
-				sb.append(generateRequestBuilderBody(req, idx, separateHeaders, separateParams));
+				sb.append(generateRequestBuilderBody(req, index, separateHeaders, separateParams));
 			}
 			
 			//----------------------------------
@@ -1091,7 +1115,7 @@ public class UsecaseConverted extends PFRUsecase {
 			//sb.append("\r\n");
 			//sb.append(postfix).append("// if (!").append(responseVar).append(".isSuccess()) { return; }\r\n");
 
-			idx++;
+			index++;
 		}
 
 		if (surroundTry) {
@@ -1105,16 +1129,16 @@ public class UsecaseConverted extends PFRUsecase {
 
 		// If separateRequests, create separate methods
 		if (separateRequests) {
-			idx = 0;
+			index = 0;
 			for (RequestEntry req : requests) {
-				String methodName = "r"+ req.indexedName(idx);
+				String methodName = "r"+ req.indexedName(index, true);
 				sb.append("	/***************************************************************************\n");
 				sb.append("	 * \n");
 				sb.append("	 ***************************************************************************/\n");
 				sb.append("	private PFRHttpResponse ").append(methodName).append("() throws ResponseFailedException {\n");
-				sb.append("		return "+generateRequestBuilderBody(req, idx, separateHeaders, separateParams));
+				sb.append("		return "+generateRequestBuilderBody(req, index, separateHeaders, separateParams));
 				sb.append("\n	}\n\n");
-				idx++;
+				index++;
 			}
 		}
 
@@ -1198,7 +1222,7 @@ public class UsecaseConverted extends PFRUsecase {
 
 		//--------------------------------------------------
 		// Create
-		sb.append("PFRHttp.create(\"").append(req.indexedName(idx)).append("\", ").append(urlPart).append(")");
+		sb.append("PFRHttp.create(\"").append(req.indexedName(idx,false)).append("\", ").append(urlPart).append(")");
 		
 		//----------------------------------
 		// SLA 
@@ -1476,8 +1500,8 @@ public class UsecaseConverted extends PFRUsecase {
 		 * Returns the name prefixed with a 3 digit
 		 * index.
 		 *********************************************/
-		public String indexedName(int index) {
-			return PFRHttpConverter.threeDigits(index) + "_" + getSanitizedName();
+		public String indexedName(int index, boolean sanitizeDots) {
+			return PFRHttpConverter.threeDigits(index) + "_" + getSanitizedName(sanitizeDots);
 		}
 			
 		/*********************************************
@@ -1538,8 +1562,18 @@ public class UsecaseConverted extends PFRUsecase {
 		public void setURL(String URL) {
 			
 			this.url = URL;
-			this.urlHost = PFR.Text.extractRegexFirst("(.*?//.*?)/", 0, URL);
-			this.urlQuery = PFR.Text.extractRegexFirst(".*?//.*?(/.*)", 0, URL);
+			
+			//------------------------
+			// Extract Host
+			if(URL.contains("://")) {
+				this.urlHost = PFR.Text.extractRegexFirst("(.*?//.*?)/", 0, URL);
+				this.urlQuery = PFR.Text.extractRegexFirst(".*?//.*?(/.*)", 0, URL);
+			}else if(URL.contains("/")) {
+				this.urlHost = PFR.Text.extractRegexFirst("(.*?)/", 0, URL);
+				this.urlQuery = PFR.Text.extractRegexFirst(".*?(/.*)", 0, URL);
+			}else {
+				this.urlHost = URL;
+			}
 			
 			//------------------------
 			// Define URL Variable
@@ -1550,7 +1584,7 @@ public class UsecaseConverted extends PFRUsecase {
 			urlVariable = "url_" + hostList.indexOf(urlHost); 
 
 		}
-		
+				
 		/*****************************************************************************
 		 * Check if the requests should be included according to the UI options.
 		 *
@@ -1586,7 +1620,7 @@ public class UsecaseConverted extends PFRUsecase {
 		 * @param url url
 		 * @return sanitized name
 		 *****************************************************************************/
-		public String getSanitizedName() {
+		public String getSanitizedName(boolean sanitizeDots) {
 		
 			//-------------------------------
 			// Check Null
@@ -1608,10 +1642,12 @@ public class UsecaseConverted extends PFRUsecase {
 			// Remove Special chars
 			sanitized = PFRHttp.decode(sanitized);
 			int maxLength = (Integer)spMaxNameLength.getValue();
-			sanitized = sanitized.replaceAll("[^a-zA-Z0-9]", "_");
+			sanitized = sanitized.replaceAll("[^a-zA-Z0-9\\.]", "_");
 			
-			if (sanitized.length() > maxLength) sanitized = sanitized.substring(0, maxLength);
-			if (sanitized.isEmpty()) sanitized = "request";
+			if(sanitizeDots) 					{ sanitized = sanitized.replace(".", "_");  }
+		
+			if (sanitized.length() > maxLength) { sanitized = sanitized.substring(0, maxLength); }
+			if (sanitized.isEmpty()) 			{ sanitized = "request"; }
 			
 			if(sanitized.endsWith("_")) {
 				sanitized = sanitized.substring(0, sanitized.length()-1); // Remove _ at the end
