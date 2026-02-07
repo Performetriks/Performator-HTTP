@@ -321,12 +321,11 @@ public class PFRHttp {
 		
 		if(params != null && !params.isEmpty()) {
 			
-			if(urlWithPath.endsWith("?") || urlWithPath.endsWith("/")) {
-				urlWithPath = urlWithPath.substring(0, urlWithPath.length()-1);
-			}
 			StringBuilder builder = new StringBuilder(urlWithPath);
 			
-			builder.append("?");
+			if( !urlWithPath.endsWith("?") ) {
+				builder.append("?");
+			}
 			
 			for(Entry<String,String> param : params.entrySet()) {
 				builder.append(encode(param.getKey(), param.getValue()));
