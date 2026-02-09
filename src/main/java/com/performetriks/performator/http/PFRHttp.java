@@ -331,7 +331,8 @@ public class PFRHttp {
 				builder.append(encode(param.getKey(), param.getValue()));
 			}
 			
-			return builder.toString();
+			// "?&" seems valid syntax, but some HTTP servers or apps might have troubles with that
+			return builder.toString().replace("?&", "?");
 		}
 		
 		return urlWithPath;

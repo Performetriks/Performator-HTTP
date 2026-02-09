@@ -233,8 +233,9 @@ public class PFRHttpResponse {
 		builder.append(p+"Log Details: "+PFRContext.logDetailsString().trim() );
 		builder.append(p+"Duration:    "+getDuration()+" ms");
 		builder.append(p+"---------------- REQUEST ----------------");
-		builder.append(p+"URL:         "+request.URL);
 		builder.append(p+"Method:      "+request.method);
+		builder.append(p+"URL:         "+request.URL);
+		builder.append(p+"URL Final:   "+request.buildURLwithParams());
 		builder.append(p+"Params:      "+paramsString);
 		builder.append(p+"Headers:     "+headersString);
 		builder.append(p+"Cookies:     "+cookieHeader);
