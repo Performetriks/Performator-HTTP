@@ -834,6 +834,19 @@ public class PFRHttpRequestBuilder {
 		return this; 
 	}
 	
+	/***************************************************************************
+	 * Returns true if the header should be included in the generated request.
+	 * Returns false otherwise.
+	 * This check is needed to prevent exceptions thrown by Apache HTTP Client.
+	 * @param headerName the name of the header
+	 ***************************************************************************/ 
+	public static boolean isIncludedHeader(String headerName) { 
+		return (! headerName.startsWith(":") 
+			 && ! headerName.equalsIgnoreCase("content-length")
+			 && ! headerName.equalsIgnoreCase("transfer-encoding") 
+		);
+	}
+	
 	
 	
 	/***************************************************************************
@@ -1002,10 +1015,16 @@ public class PFRHttpRequestBuilder {
 				// Handle headers
 				if(headers != null ) {
 					for(Entry<String, String> header : headers.entrySet()) {
-						requestBase.addHeader(header.getKey(), header.getValue());
+						// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
+						String name = header.getKey();
+						
+						if( isIncludedHeader(name) ){
+							requestBase.addHeader(header.getKey(), header.getValue());
+						}
 					}
 				}
 
+				
 				//-----------------------------------
 				// Connect and create response
 				CloseableHttpClient httpClient = clientBuilder.build();

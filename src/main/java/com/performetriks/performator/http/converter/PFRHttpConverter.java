@@ -66,6 +66,7 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.performetriks.performator.base.PFR;
 import com.performetriks.performator.http.PFRHttp;
+import com.performetriks.performator.http.PFRHttpRequestBuilder;
 import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 
@@ -163,7 +164,7 @@ public class PFRHttpConverter extends JFrame {
 	 * Constructor: sets up the JFrame and initializes UI components.
 	 *****************************************************************************/
 	public PFRHttpConverter() {
-		super("HAR to Performator Converter");
+		super("Performator Http Converter");
 		initializeFrame();
 		initializeUI();
 		attachListeners();
@@ -1153,7 +1154,10 @@ public class UsecaseConverted extends PFRUsecase {
 					sb.append("	private LinkedHashMap<String,String> getHeaders_").append( threeDigits(hidx) ).append("() {\n");
 					sb.append("		LinkedHashMap<String,String> headers = new LinkedHashMap<>();\n\n");
 					for (Map.Entry<String, String> e : req.headers.entrySet()) {
-						sb.append("		headers.put(\"").append(escape(e.getKey())).append("\", \"").append(escape(e.getValue())).append("\");\n");
+						String name = e.getKey();
+						if( PFRHttpRequestBuilder.isIncludedHeader(name) ){
+							sb.append("		headers.put(\"").append(escape(name)).append("\", \"").append(escape(e.getValue())).append("\");\n");
+						}
 					}
 					sb.append("		"+PLACEHOLDER_HEADERS_AFTER+"\n");
 					sb.append("		return headers;\n");
@@ -1252,7 +1256,11 @@ public class UsecaseConverted extends PFRUsecase {
 				sb.append(postfix).append("\t.headers(getHeaders_").append(threeDigits(findHeaderIndex(req))).append("())");
 			} else {
 				for (Map.Entry<String, String> e : req.headers.entrySet()) {
-					sb.append(postfix).append("\t.header(\"").append(escape(e.getKey())).append("\", \"").append(escape(e.getValue())).append("\")");
+					String name = e.getKey();
+					if( PFRHttpRequestBuilder.isIncludedHeader(name) ){
+						sb.append(postfix).append("\t.header(\"").append(escape(name)).append("\", \"").append(escape(e.getValue())).append("\")");
+					}
+					
 				}
 			}
 		}
