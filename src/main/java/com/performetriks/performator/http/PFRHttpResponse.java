@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.cookie.Cookie;
@@ -53,6 +55,7 @@ public class PFRHttpResponse {
 	
 	private Header[] headers;
 	private JsonObject headersAsJsonCached;
+	private LinkedHashMap<String,String> headersAsMapCached;
 	
 	HSRRecord record = null;
 	boolean hasError = false;
@@ -555,14 +558,17 @@ public class PFRHttpResponse {
 	}
 	
 	/******************************************************************************************************
-	 * 
+	 * Returns the headers array retrieved from Apache Http Client.
+	 * @return headers of the response
 	 ******************************************************************************************************/
 	public Header[] getHeaders() {
 		return headers;
 	}
 	
 	/******************************************************************************************************
-	 * 
+	 * Converts the headers to a JsonObject and returns the object. The object will contain all the headers
+	 * as key/value pairs.
+	 * @return headers of the response as a JsonObject
 	 ******************************************************************************************************/
 	public JsonObject getHeadersAsJson() {
 		
@@ -582,6 +588,30 @@ public class PFRHttpResponse {
 		}
 		
 		return headersAsJsonCached;
+	}
+	/******************************************************************************************************
+	 * Converts the headers to a LinkedHashMap and returns the object. The map will contain all the headers
+	 * as key/value pairs.
+	 * @return headers of the response as a map
+	 ******************************************************************************************************/
+	public Map<String,String> getHeadersAsMap() {
+		
+		if(headersAsMapCached == null ) {
+			LinkedHashMap<String,String> map = new LinkedHashMap<>();
+			
+			if(headers != null) {
+				for(Header entry : headers) {
+					
+					if(entry.getName() != null) {
+						map.put(entry.getName(), entry.getValue());
+					}
+				}
+			}
+			
+			headersAsMapCached = map;
+		}
+		
+		return headersAsMapCached;
 	}
 	
 }
