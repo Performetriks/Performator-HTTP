@@ -1089,9 +1089,11 @@ public class UsecaseConverted extends PFRUsecase {
 	
 			//----------------------------------------
 			// Header
-			sb.append(postfix).append("//---------------------------------------------");
-			sb.append(postfix).append("// ");
-			sb.append(postfix).append("//---------------------------------------------");
+			if ( ! separateRequests ) {
+				sb.append(postfix).append("//---------------------------------------------");
+				sb.append(postfix).append("// ");
+				sb.append(postfix).append("//---------------------------------------------");
+			}
 			
 			//----------------------------------------
 			// Print Variable
@@ -1120,10 +1122,12 @@ public class UsecaseConverted extends PFRUsecase {
 		}
 
 		if (surroundTry) {
-			sb.append("		} catch(ResponseFailedException e) {\n");
-			sb.append("			"+PLACEHOLDER_CATCH_BLOCK+"\n");
-			sb.append("			throw e;\n");
-			sb.append("		}\n");
+			sb.append("\r\n\r\n")
+			  .append("		} catch(ResponseFailedException e) {\n")
+			  .append("			"+PLACEHOLDER_CATCH_BLOCK+"\n")
+			  .append("			throw e;\n")
+			  .append("		}\n")
+			  ;
 		}
 		sb.append("		"+PLACEHOLDER_EXECUTE_END+"\n");
 		sb.append("	}\n\n");
@@ -1136,7 +1140,7 @@ public class UsecaseConverted extends PFRUsecase {
 				sb.append("	/***************************************************************************\n");
 				sb.append("	 * \n");
 				sb.append("	 ***************************************************************************/\n");
-				sb.append("	private PFRHttpResponse ").append(methodName).append("() throws ResponseFailedException {\n");
+				sb.append("	public PFRHttpResponse ").append(methodName).append("() throws ResponseFailedException {\n");
 				sb.append("		return "+generateRequestBuilderBody(req, index, separateHeaders, separateParams));
 				sb.append("\n	}\n\n");
 				index++;
@@ -1226,7 +1230,8 @@ public class UsecaseConverted extends PFRUsecase {
 
 		//--------------------------------------------------
 		// Create
-		sb.append("PFRHttp.create(\"").append(req.indexedName(idx,false)).append("\", ").append(urlPart).append(")");
+		sb.append("PFRHttp.create(\"").append(req.indexedName(idx,false)).append("\"")
+				 .append(postfix+"\t\t, ").append(urlPart).append(")");
 		
 		//----------------------------------
 		// SLA 
