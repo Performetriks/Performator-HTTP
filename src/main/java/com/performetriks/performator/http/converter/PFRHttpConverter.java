@@ -996,6 +996,7 @@ package com.performetriks.performator.quickstart.usecase;
 
 import java.util.LinkedHashMap;
 import com.performetriks.performator.base.PFRUsecase;
+import com.performetriks.performator.data.PFRDataRecord;
 import com.performetriks.performator.http.PFRHttp;
 import com.performetriks.performator.http.PFRHttpResponse;
 import com.performetriks.performator.http.ResponseFailedException;
@@ -1073,15 +1074,25 @@ public class UsecaseConverted extends PFRUsecase {
 		boolean separateParams = cbSeparateParameters.isSelected();
 		
 		String postfix = "\r\n\t\t\t";
+		
 		//----------------------------------------
-		// Separate Variable
+		// Print Variables
+		
+		sb.append(postfix).append("//---------------------------------------------");
+		sb.append(postfix).append("// Variables");
+		sb.append(postfix).append("//---------------------------------------------");
+		sb.append(postfix).append("PFRDataSource source = Globals.DATASOURCE; // manual adjustment needed");
+		sb.append(postfix).append("PFRDataRecord data = source.next();");
+		
 		if( ! separateResponses ) {
 			sb.append(postfix).append("PFRHttpResponse r = null;\r\n");
 		}
+
 		
+		//----------------------------------------
+		// Print Requests
 		int index = 0;
 		
-		//RequestEntry previous = null;
 		for (RequestEntry req : requests) {
 			
 			String responseVar = "r";
@@ -1108,7 +1119,7 @@ public class UsecaseConverted extends PFRUsecase {
 			// Separate Requests
 			if (separateRequests) {
 				String name = req.indexedName(index, true);
-				sb.append("r"+name).append("();");
+				sb.append("r"+name).append("(data);");
 			} else {
 				sb.append(generateRequestBuilderBody(req, index, separateHeaders, separateParams));
 			}
@@ -1140,7 +1151,7 @@ public class UsecaseConverted extends PFRUsecase {
 				sb.append("	/***************************************************************************\n");
 				sb.append("	 * \n");
 				sb.append("	 ***************************************************************************/\n");
-				sb.append("	public PFRHttpResponse ").append(methodName).append("() throws ResponseFailedException {\n");
+				sb.append("	public PFRHttpResponse ").append(methodName).append("(PFRDataRecord data) throws ResponseFailedException {\n");
 				sb.append("		return "+generateRequestBuilderBody(req, index, separateHeaders, separateParams));
 				sb.append("\n	}\n\n");
 				index++;
