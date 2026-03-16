@@ -17,6 +17,7 @@ import org.apache.hc.client5.http.auth.KerberosCredentials;
 import org.apache.hc.client5.http.auth.NTCredentials;
 import org.apache.hc.client5.http.auth.StandardAuthScheme;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
+import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.auth.BasicScheme;
 import org.apache.hc.client5.http.impl.auth.BasicSchemeFactory;
@@ -30,10 +31,12 @@ import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.io.entity.StringEntity;
+import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 import org.ietf.jgss.GSSCredential;
 import org.ietf.jgss.GSSManager;
@@ -58,6 +61,8 @@ import com.xresch.hsr.utils.HSRText.CheckType;
 public class PFRHttpRequestBuilder {
 	
 	private static final String HEADER_CONTENT_TYPE = "Content-Type";
+	
+
 	private PFRHttpAuthMethod authMethod = PFRHttpAuthMethod.BASIC;
 	private String username = null;
 	private char[] pwdArray = null;
@@ -867,172 +872,161 @@ public class PFRHttpRequestBuilder {
 			
 
 			HttpUriRequestBase requestBase = new HttpUriRequestBase(method, URI.create(urlWithParams));
+												
+			//-----------------------------------
+			// Handle POST Body
+			if(body != null) {
+				
+				StringEntity bodyEntity = new StringEntity(body);
+				requestBase.setEntity(bodyEntity);
+				
+			}
 			
-			if(requestBase != null) {
-				
-									
-				//-----------------------------------
-				// Handle POST Body
-				if(body != null) {
-					
-					StringEntity bodyEntity = new StringEntity(body);
-					requestBase.setEntity(bodyEntity);
-					
-//						if(headers.containsKey(HEADER_CONTENT_TYPE)) {
-//							connection.setRequestProperty(HEADER_CONTENT_TYPE, headers.get(HEADER_CONTENT_TYPE));
-//						}else if(!Strings.isNullOrEmpty(requestBodyContentType)) {
-//							connection.setRequestProperty(HEADER_CONTENT_TYPE, requestBodyContentType);
-//						}
-//						connection.setDoOutput(true);
-//						connection.connect();
-//						try(OutputStream outStream = connection.getOutputStream()) {
-//						    byte[] input = requestBody.getBytes("utf-8");
-//						    outStream.write(input, 0, input.length);           
-//						}
-				}
-				
-				
+			//----------------------------------
+			// Create HTTP Client
+			HttpClientBuilder clientBuilder = 
+						HttpClientBuilder.create()
+								.setDefaultCookieStore(PFRHttp.cookieStore.get())
+								.setConnectionManager(PFRHttp.getConnectionManager())
+								.evictExpiredConnections()
+								.evictIdleConnections(TimeValue.ofSeconds(30))
+								;
+			
+			
+			clientBuilder.setDefaultRequestConfig(
+						 RequestConfig
+								.custom()
+								.setResponseTimeout(Timeout.ofMilliseconds(responseTimeoutMillis) )
+								.build()
+					);
+			PFRHttp.httpClientAddProxy(clientBuilder, URL);
+			PFRHttp.setSSLContext(clientBuilder);
 
-				//----------------------------------
-				// Create HTTP Client
+			//----------------------------------
+			// Create HTTP Client
+			if(disableFollowRedirects) {
+				clientBuilder.disableRedirectHandling();
+			}
+			
+		    //----------------------------------
+			// Set Auth mechanism
+			if(username != null) {
 				
-				HttpClientBuilder clientBuilder = HttpClientBuilder.create();
-				clientBuilder.setDefaultCookieStore(PFRHttp.cookieStore.get());
-				
-				clientBuilder.setDefaultRequestConfig(
-							 RequestConfig
-									.custom()
-									.setResponseTimeout(Timeout.of(responseTimeoutMillis, TimeUnit.MILLISECONDS) )
-									.build()
-						);
-				PFRHttp.httpClientAddProxy(clientBuilder, URL);
-				PFRHttp.setSSLContext(clientBuilder);
+				//---------------------------------
+				// Credential Provider
+				String scheme = requestBase.getUri().getScheme();
+				String hostname = requestBase.getUri().getHost();
+				int port = requestBase.getUri().getPort();
+				HttpHost targetHost = new HttpHost(scheme, hostname, port);
 
-				//----------------------------------
-				// Create HTTP Client
-				if(disableFollowRedirects) {
-					clientBuilder.disableRedirectHandling();
-				}
+				CredentialsProviderBuilder credProviderBuilder = CredentialsProviderBuilder.create();
 				
-			    //----------------------------------
-				// Set Auth mechanism
-				if(username != null) {
+				RegistryBuilder<AuthSchemeFactory> registryBuilder = RegistryBuilder.<AuthSchemeFactory>create();
+				
+				switch(this.authMethod) {
+				
+					//------------------------------
+					// Basic 
+					case BASIC:
+						//PRFHttp.addBasicAuthorizationHeader(headers, username, new String(pwdArray));
+						AuthScope authScopeBasic = new AuthScope(targetHost, null, new BasicScheme().getName());
+						credProviderBuilder.add(authScopeBasic, username, pwdArray);
+						registryBuilder.register(StandardAuthScheme.BASIC, BasicSchemeFactory.INSTANCE);
+					break;
+					
+					//------------------------------
+					// Basic 
+					case BASIC_HEADER:
+						PFRHttp.addBasicAuthorizationHeader(headers, username, new String(pwdArray));
+					break;
+					
+					
+					//------------------------------
+					// Digest
+					case DIGEST:
+						AuthScope authScopeDigest = new AuthScope(targetHost, null, new DigestScheme().getName());
+						credProviderBuilder.add(authScopeDigest, username, pwdArray);
+						registryBuilder.register(StandardAuthScheme.DIGEST, DigestSchemeFactory.INSTANCE);
+					break;
+					
+					//------------------------------
+					// NTLM
+					case NTLM:
+						String ntlmUsername = username;
+						String ntlmDomain = null;
+						if(username.contains("@")) {
+							String[] splitted = username.split("@");
+							ntlmUsername = splitted[0];
+							ntlmDomain = splitted[1];
+						}
+						AuthScope authScopeNTLM = new AuthScope(targetHost, null, new NTLMScheme().getName());
+						
+						NTCredentials ntlmCreds = new NTCredentials(pwdArray, ntlmUsername, ntlmDomain, null);
+						credProviderBuilder.add(authScopeNTLM, ntlmCreds);
+						registryBuilder.register(StandardAuthScheme.NTLM, NTLMSchemeFactory.INSTANCE);
+					break;
+						
+					//------------------------------
+					// KERBEROS (experimental)
+					case KERBEROS:
+						GSSManager manager = GSSManager.getInstance();
+						GSSName name = manager.createName(username, GSSName.NT_USER_NAME);
+					    GSSCredential gssCred = manager.createCredential(name,GSSCredential.DEFAULT_LIFETIME, (Oid) null, GSSCredential.INITIATE_AND_ACCEPT);
+					    
+						AuthScope authScopeKerberos = new AuthScope(targetHost, null, new KerberosScheme().getName());
+					
+						KerberosCredentials kerbCred = new KerberosCredentials(gssCred);
+						credProviderBuilder.add(authScopeKerberos, kerbCred);
+						registryBuilder.register(StandardAuthScheme.SPNEGO, new SPNegoSchemeFactory(
+											                KerberosConfig.custom()
+									                        .setStripPort(KerberosConfig.Option.DEFAULT)
+									                        .setUseCanonicalHostname(KerberosConfig.Option.DEFAULT)
+									                        .build(),
+									                SystemDefaultDnsResolver.INSTANCE))
+									        .register(StandardAuthScheme.KERBEROS, KerberosSchemeFactory.DEFAULT);
+					break;
+					
+					default:
+					break;
+				
+				}
+
+				if (this.authMethod != PFRHttpAuthMethod.BASIC_HEADER) {
+					//---------------------------------
+					// Scheme Factory
+					Registry<AuthSchemeFactory> schemeFactoryRegistry = registryBuilder.build();
 					
 					//---------------------------------
 					// Credential Provider
-					String scheme = requestBase.getUri().getScheme();
-					String hostname = requestBase.getUri().getHost();
-					int port = requestBase.getUri().getPort();
-					HttpHost targetHost = new HttpHost(scheme, hostname, port);
-
-					CredentialsProviderBuilder credProviderBuilder = CredentialsProviderBuilder.create();
-					
-					RegistryBuilder<AuthSchemeFactory> registryBuilder = RegistryBuilder.<AuthSchemeFactory>create();
-					
-					switch(this.authMethod) {
-					
-						//------------------------------
-						// Basic 
-						case BASIC:
-							//PRFHttp.addBasicAuthorizationHeader(headers, username, new String(pwdArray));
-							AuthScope authScopeBasic = new AuthScope(targetHost, null, new BasicScheme().getName());
-							credProviderBuilder.add(authScopeBasic, username, pwdArray);
-							registryBuilder.register(StandardAuthScheme.BASIC, BasicSchemeFactory.INSTANCE);
-						break;
-						
-						//------------------------------
-						// Basic 
-						case BASIC_HEADER:
-							PFRHttp.addBasicAuthorizationHeader(headers, username, new String(pwdArray));
-						break;
-						
-						
-						//------------------------------
-						// Digest
-						case DIGEST:
-							AuthScope authScopeDigest = new AuthScope(targetHost, null, new DigestScheme().getName());
-							credProviderBuilder.add(authScopeDigest, username, pwdArray);
-							registryBuilder.register(StandardAuthScheme.DIGEST, DigestSchemeFactory.INSTANCE);
-						break;
-						
-						//------------------------------
-						// NTLM
-						case NTLM:
-							String ntlmUsername = username;
-							String ntlmDomain = null;
-							if(username.contains("@")) {
-								String[] splitted = username.split("@");
-								ntlmUsername = splitted[0];
-								ntlmDomain = splitted[1];
-							}
-							AuthScope authScopeNTLM = new AuthScope(targetHost, null, new NTLMScheme().getName());
-							
-							NTCredentials ntlmCreds = new NTCredentials(pwdArray, ntlmUsername, ntlmDomain, null);
-							credProviderBuilder.add(authScopeNTLM, ntlmCreds);
-							registryBuilder.register(StandardAuthScheme.NTLM, NTLMSchemeFactory.INSTANCE);
-						break;
-							
-						//------------------------------
-						// KERBEROS (experimental)
-						case KERBEROS:
-							GSSManager manager = GSSManager.getInstance();
-							GSSName name = manager.createName(username, GSSName.NT_USER_NAME);
-						    GSSCredential gssCred = manager.createCredential(name,GSSCredential.DEFAULT_LIFETIME, (Oid) null, GSSCredential.INITIATE_AND_ACCEPT);
-						    
-							AuthScope authScopeKerberos = new AuthScope(targetHost, null, new KerberosScheme().getName());
-						
-							KerberosCredentials kerbCred = new KerberosCredentials(gssCred);
-							credProviderBuilder.add(authScopeKerberos, kerbCred);
-							registryBuilder.register(StandardAuthScheme.SPNEGO, new SPNegoSchemeFactory(
-												                KerberosConfig.custom()
-										                        .setStripPort(KerberosConfig.Option.DEFAULT)
-										                        .setUseCanonicalHostname(KerberosConfig.Option.DEFAULT)
-										                        .build(),
-										                SystemDefaultDnsResolver.INSTANCE))
-										        .register(StandardAuthScheme.KERBEROS, KerberosSchemeFactory.DEFAULT);
-						break;
-						
-						default:
-						break;
-					
-					}
-
-					if (this.authMethod != PFRHttpAuthMethod.BASIC_HEADER) {
-						//---------------------------------
-						// Scheme Factory
-						Registry<AuthSchemeFactory> schemeFactoryRegistry = registryBuilder.build();
-						
-						//---------------------------------
-						// Credential Provider
-						clientBuilder
-							.setDefaultAuthSchemeRegistry(schemeFactoryRegistry)
-							.setDefaultCredentialsProvider(credProviderBuilder.build());
-					}
-					
+					clientBuilder
+						.setDefaultAuthSchemeRegistry(schemeFactoryRegistry)
+						.setDefaultCredentialsProvider(credProviderBuilder.build());
 				}
-				
-				//-----------------------------------
-				// Handle headers
-				if(headers != null ) {
-					for(Entry<String, String> header : headers.entrySet()) {
-						// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
-						String name = header.getKey();
-						
-						if( isIncludedHeader(name) ){
-							requestBase.addHeader(header.getKey(), header.getValue());
-						}
-					}
-				}
-
-				
-				//-----------------------------------
-				// Connect and create response
-				CloseableHttpClient httpClient = clientBuilder.build();
-
-				PFRHttpResponse response = new PFRHttpResponse(this, httpClient, requestBase, autoCloseClient);
-				return response;
 				
 			}
+			
+			//-----------------------------------
+			// Handle headers
+			if(headers != null ) {
+				for(Entry<String, String> header : headers.entrySet()) {
+					// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
+					String name = header.getKey();
+					
+					if( isIncludedHeader(name) ){
+						requestBase.addHeader(header.getKey(), header.getValue());
+					}
+				}
+			}
+
+			
+			//-----------------------------------
+			// Connect and create response
+			CloseableHttpClient httpClient = clientBuilder.build();
+
+			PFRHttpResponse response = new PFRHttpResponse(this, httpClient, requestBase, autoCloseClient);
+			return response;
+			
+		
 		} catch (Throwable e) { 
 			
 			// do not handle ResponseFailedException

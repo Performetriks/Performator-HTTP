@@ -22,10 +22,12 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
+import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
 import org.apache.hc.client5.http.impl.io.BasicHttpClientConnectionManager;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
 import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
 import org.apache.hc.client5.http.socket.PlainConnectionSocketFactory;
@@ -37,6 +39,7 @@ import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.hc.core5.ssl.TrustStrategy;
+import org.apache.hc.core5.util.Timeout;
 import org.graalvm.polyglot.Value;
 import org.slf4j.LoggerFactory;
 
@@ -60,7 +63,9 @@ public class PFRHttp {
 	
 	static Logger logger = (ch.qos.logback.classic.Logger)LoggerFactory.getLogger(PFRHttp.class.getName());
 				
-
+	// only one static connection pool, avoid ephemeral port exhaustion
+	private static PoolingHttpClientConnectionManager connectionManager = null;
+	
 	//Use Threadlocal to avoid polyglot multi thread exceptions
 	private static ThreadLocal<PFRScriptingContext> javascriptEngine = new ThreadLocal<PFRScriptingContext>();
 	
@@ -91,6 +96,22 @@ public class PFRHttp {
 			//default timeout of  3 minutes
 	        return HSRTimeUnit.m.toMillis(3);
 	    }
+	};
+	
+	private static InheritableThreadLocal<Long> defaultConnectTimeoutMillis =  new InheritableThreadLocal<>() { 
+		@Override
+		protected Long initialValue() {
+			//default timeout of  10 s
+			return HSRTimeUnit.s.toMillis(10);
+		}
+	};
+	
+	private static InheritableThreadLocal<Long> defaultSocketTimeoutMillis =  new InheritableThreadLocal<>() { 
+		@Override
+		protected Long initialValue() {
+			//default timeout of 30 s
+			return HSRTimeUnit.s.toMillis(30);
+		}
 	};
 	
 	private static InheritableThreadLocal<Long> defaultPauseMillisLower = new InheritableThreadLocal<>() { 
@@ -204,7 +225,7 @@ public class PFRHttp {
 	
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Set the default response timeout used for all the requests of the current user(thread).
+	 * Set the default response timeout used for all the requests of the current thread.
 	 ******************************************************************************************************/
 	public static void defaultResponseTimeout(long millis) {
 		defaultResponseTimeoutMillis.set(millis);
@@ -212,11 +233,49 @@ public class PFRHttp {
 	
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Returns the default response timeout for all the requests of the current user(thread).
+	 * Returns the default response timeout for all the requests of the current thread.
 	 ******************************************************************************************************/
 	public static long defaultResponseTimeout() {
 		return defaultResponseTimeoutMillis.get();
 	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * <b>IMPORTANT:</b> This method has to be called before the first request is sent.<br>
+	 * Set the default connect timeout used for all the requests of the current thread.
+	 ******************************************************************************************************/
+	public static void defaultConnectTimeout(long millis) {
+		defaultConnectTimeoutMillis.set(millis);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Returns the default connect timeout for all the requests of the current thread.
+	 ******************************************************************************************************/
+	public static long defaultConnectTimeout() {
+		return defaultConnectTimeoutMillis.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * <b>IMPORTANT:</b> This method has to be called before the first request is sent.<br>
+	 * Set the default socket timeout used for all the requests of the current thread.
+	 * 
+	 ******************************************************************************************************/
+	public static void defaultSocketTimeout(long millis) {
+		defaultSocketTimeoutMillis.set(millis);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Returns the default socket timeout for all the requests of the current thread.
+	 ******************************************************************************************************/
+	public static long defaultSocketTimeout() {
+		return defaultSocketTimeoutMillis.get();
+	}
+
+	
+
 	
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
@@ -683,6 +742,28 @@ public class PFRHttp {
 	 ******************************************************************************************************/
 	public static void clearCookiesExpired() {
 		cookieStore.get().clearExpired(Instant.now());
+	}
+	
+	/******************************************************************************************************
+	 * Returns the connection manager used for all the connections.
+	 * @return 
+	 * 
+	 ******************************************************************************************************/
+	public static PoolingHttpClientConnectionManager getConnectionManager() {
+		if(connectionManager == null) {
+			connectionManager = new PoolingHttpClientConnectionManager();
+			connectionManager.setMaxTotal(1000);
+			connectionManager.setDefaultMaxPerRoute(50);
+			
+			connectionManager.setDefaultConnectionConfig(
+					ConnectionConfig.custom()
+				        .setConnectTimeout( Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
+				        .setSocketTimeout(Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
+				        .build()
+			        );
+		}
+		
+		return connectionManager;
 	}
 	
 	/******************************************************************************************************
