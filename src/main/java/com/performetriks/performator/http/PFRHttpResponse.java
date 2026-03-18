@@ -17,6 +17,7 @@ import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpException;
 import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.protocol.HttpContext;
 import org.apache.hc.core5.io.CloseMode;
 import org.slf4j.LoggerFactory;
 
@@ -74,7 +75,7 @@ public class PFRHttpResponse {
 	/******************************************************************************************************
 	 * 
 	 ******************************************************************************************************/
-	public PFRHttpResponse(PFRHttpRequestBuilder request, CloseableHttpClient httpClient, HttpUriRequestBase requestBase, boolean autoCloseClient) {
+	public PFRHttpResponse(PFRHttpRequestBuilder request, CloseableHttpClient httpClient, HttpUriRequestBase requestBase, HttpContext context) {
 		
 		this.request = request;
 		this.httpClient = httpClient;
@@ -100,7 +101,7 @@ public class PFRHttpResponse {
 			
 				//--------------------------
 				// Execute Request
-				Boolean success = httpClient.execute(requestBase, new HttpClientResponseHandler<Boolean>() {
+				Boolean success = httpClient.execute(requestBase, context, new HttpClientResponseHandler<Boolean>() {
 					@Override
 					public Boolean handleResponse(ClassicHttpResponse response) throws HttpException, IOException {
 												
@@ -110,9 +111,8 @@ public class PFRHttpResponse {
 
 							HttpEntity entity = response.getEntity();
 							if(entity != null) {
-								body = EntityUtils.toString(response.getEntity());
+								body = EntityUtils.toString(entity);
 							}
-
 						}
 						return true;
 					}
@@ -184,10 +184,6 @@ public class PFRHttpResponse {
 				printDebugLog();
 			}
 				
-			//-----------------------------
-			// Close Client
-			if(autoCloseClient) { close();}
-			
 			//-----------------------------
 			// Pause before continuing
 			if(request.pauseMillisUpper > 0) {

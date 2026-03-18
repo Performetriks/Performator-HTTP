@@ -7,9 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.TimeUnit;
 
-import org.apache.hc.client5.http.ConnectionKeepAliveStrategy;
 import org.apache.hc.client5.http.SystemDefaultDnsResolver;
 import org.apache.hc.client5.http.auth.AuthSchemeFactory;
 import org.apache.hc.client5.http.auth.AuthScope;
@@ -18,7 +16,6 @@ import org.apache.hc.client5.http.auth.KerberosCredentials;
 import org.apache.hc.client5.http.auth.NTCredentials;
 import org.apache.hc.client5.http.auth.StandardAuthScheme;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
-import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.auth.BasicScheme;
 import org.apache.hc.client5.http.impl.auth.BasicSchemeFactory;
@@ -32,10 +29,10 @@ import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.http.HttpHost;
-import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
+import org.apache.hc.core5.http.impl.DefaultConnectionReuseStrategy;
 import org.apache.hc.core5.http.io.entity.StringEntity;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
@@ -61,9 +58,13 @@ import com.xresch.hsr.utils.HSRText.CheckType;
  *******************************************************************************************************/
 public class PFRHttpRequestBuilder {
 	
+	private static final String SYNC_LOCK_CLIENT = "Sync Lock Client";
+	
 	private static final String HEADER_CONTENT_TYPE = "Content-Type";
 	
-
+	private static CloseableHttpClient httpClientSingle;
+	private static ThreadLocal<CloseableHttpClient> httpClient = new ThreadLocal<>();
+	
 	private PFRHttpAuthMethod authMethod = PFRHttpAuthMethod.BASIC;
 	private String username = null;
 	private char[] pwdArray = null;
@@ -94,11 +95,7 @@ public class PFRHttpRequestBuilder {
 	
 	HashMap<String, String> params = new HashMap<>();
 	HashMap<String, String> headers = new HashMap<>();
-	
-	private ConnectionKeepAliveStrategy keepAliveStrategy = (response, context) -> {
-	    return TimeValue.ofSeconds(60); // force reuse window
-	};
-	
+		
 	/***************************************************************************
 	 * 
 	 ***************************************************************************/
@@ -862,7 +859,38 @@ public class PFRHttpRequestBuilder {
 		);
 	}
 	
-	
+	/***************************************************************************
+	 * Build and send the request. Returns a 
+	 * PRFHttpResponse or null in case of errors.
+	 ***************************************************************************/
+	private static CloseableHttpClient getClient() throws Exception {
+		
+		synchronized (SYNC_LOCK_CLIENT) {
+			
+			if(httpClientSingle == null) {
+			//if(httpClient.get() == null) {
+				HttpClientBuilder clientBuilder = 
+						HttpClientBuilder.create()
+								.setConnectionManagerShared(true)
+								.setUserAgent(PFRHttp.defaultUserAgent())
+								.setConnectionManager(PFRHttp.getConnectionManager())
+								.setKeepAliveStrategy( (response, context) -> { return TimeValue.ofSeconds(60); }) // avoid ephemeral port exhaustion
+								.setConnectionReuseStrategy(DefaultConnectionReuseStrategy.INSTANCE)
+								//.evictExpiredConnections()
+								//.evictIdleConnections(TimeValue.ofSeconds(30))
+								;
+			
+				PFRHttp.httpClientAddProxy(clientBuilder);
+				
+				httpClientSingle = clientBuilder.build();
+				// httpClient.set( clientBuilder.build());
+			}
+			
+		}
+        
+		return httpClientSingle;
+		//return httpClient.get();
+	}
 	
 	/***************************************************************************
 	 * Build and send the request. Returns a 
@@ -876,13 +904,19 @@ public class PFRHttpRequestBuilder {
 			//---------------------------------
 			// Create URL
 			String urlWithParams = buildURLwithParams();
-			//HttpURLConnection connection = createProxiedURLConnection(urlWithParams);
-			//connection.setRequestMethod(method);
-			//connection.setInstanceFollowRedirects(true);
-			
 
+			//---------------------------------
+			// Create Request Base
 			HttpUriRequestBase requestBase = new HttpUriRequestBase(method, URI.create(urlWithParams));
-												
+			
+			requestBase.setConfig(
+						 RequestConfig
+								.custom()
+								.setResponseTimeout(Timeout.ofMilliseconds(responseTimeoutMillis) )
+								.setRedirectsEnabled( ! disableFollowRedirects )
+								.build()
+					);
+			
 			//-----------------------------------
 			// Handle POST Body
 			if(body != null) {
@@ -893,33 +927,14 @@ public class PFRHttpRequestBuilder {
 			}
 			
 			//----------------------------------
-			// Create HTTP Client
-			HttpClientBuilder clientBuilder = 
-						HttpClientBuilder.create()
-								.setDefaultCookieStore(PFRHttp.cookieStore.get())
-								.setConnectionManagerShared(true)
-								.setConnectionManager(PFRHttp.getConnectionManager())
-								.setUserAgent(PFRHttp.defaultUserAgent())
-								.setKeepAliveStrategy(keepAliveStrategy)
-								//.evictExpiredConnections()
-								//.evictIdleConnections(TimeValue.ofSeconds(30))
-								;
-			
-			
-			clientBuilder.setDefaultRequestConfig(
-						 RequestConfig
-								.custom()
-								.setResponseTimeout(Timeout.ofMilliseconds(responseTimeoutMillis) )
-								.build()
-					);
-			PFRHttp.httpClientAddProxy(clientBuilder, URL);
-			PFRHttp.setSSLContext(clientBuilder);
+	        // Create HTTP Context (per request!)
+	        HttpClientContext context = HttpClientContext.create();
 
-			//----------------------------------
-			// Create HTTP Client
-			if(disableFollowRedirects) {
-				clientBuilder.disableRedirectHandling();
-			}
+	        //----------------------------------
+	        // Set Cookie Store (per request)
+	        if (PFRHttp.cookieStore.get() != null) {
+	            context.setCookieStore(PFRHttp.cookieStore.get());
+	        }
 			
 		    //----------------------------------
 			// Set Auth mechanism
@@ -1003,17 +1018,12 @@ public class PFRHttpRequestBuilder {
 					break;
 				
 				}
-
+				
+				//---------------------------------
+				// Credential Provider
 				if (this.authMethod != PFRHttpAuthMethod.BASIC_HEADER) {
-					//---------------------------------
-					// Scheme Factory
-					Registry<AuthSchemeFactory> schemeFactoryRegistry = registryBuilder.build();
-					
-					//---------------------------------
-					// Credential Provider
-					clientBuilder
-						.setDefaultAuthSchemeRegistry(schemeFactoryRegistry)
-						.setDefaultCredentialsProvider(credProviderBuilder.build());
+					context.setCredentialsProvider(credProviderBuilder.build());
+	                context.setAuthSchemeRegistry(registryBuilder.build());
 				}
 				
 			}
@@ -1031,12 +1041,10 @@ public class PFRHttpRequestBuilder {
 				}
 			}
 
-			
 			//-----------------------------------
 			// Connect and create response
-			CloseableHttpClient httpClient = clientBuilder.build();
 
-			PFRHttpResponse response = new PFRHttpResponse(this, httpClient, requestBase, autoCloseClient);
+			PFRHttpResponse response = new PFRHttpResponse(this, getClient(), requestBase, context);
 			return response;
 			
 		
@@ -1053,6 +1061,9 @@ public class PFRHttpRequestBuilder {
 		return  new PFRHttpResponse(this);
 		
 	}
+	
+
+
 	
 	
 }

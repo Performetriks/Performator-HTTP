@@ -22,22 +22,24 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
-import org.apache.hc.client5.http.ConnectionKeepAliveStrategy;
+import org.apache.hc.client5.http.HttpRoute;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
-import org.apache.hc.client5.http.impl.DefaultConnectionKeepAliveStrategy;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
 import org.apache.hc.client5.http.impl.io.BasicHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
-import org.apache.hc.client5.http.impl.routing.DefaultProxyRoutePlanner;
+import org.apache.hc.client5.http.routing.HttpRoutePlanner;
 import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
 import org.apache.hc.client5.http.socket.PlainConnectionSocketFactory;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
 import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.core5.http.HttpException;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
+import org.apache.hc.core5.http.io.SocketConfig;
+import org.apache.hc.core5.http.protocol.HttpContext;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.hc.core5.ssl.TrustStrategy;
@@ -681,6 +683,7 @@ public class PFRHttp {
 		return null;
 		
 	}
+	
 	/******************************************************************************************************
 	 * If proxy is enabled, adds a HttpHost to the client.
 	 * 
@@ -688,49 +691,90 @@ public class PFRHttp {
 	 * @param targetURL the URL that should be called over a proxy (not the url of the proxy host)
 	 * 
 	 ******************************************************************************************************/
-	public static void httpClientAddProxy(HttpClientBuilder clientBuilder, String targetURL) {
+	public static void httpClientAddProxy(HttpClientBuilder clientBuilder) {
 		
-		if(proxyPacFile.get() != null) {
-			return; // nothing todo
-		}else {
-			ArrayList<PFRProxy> proxiesArray = getProxies(targetURL);
-			
-			//--------------------------------------------------
-			// Return direct if no proxies were returned by PAC
-			if(proxiesArray.isEmpty()) {
-				return; 
-			}
-			
-			//--------------------------------------------------
-			// Iterate PAC Proxies until address is resolved
-			for(PFRProxy cfwProxy : proxiesArray) {
-				
-				if(cfwProxy.type.trim().toUpperCase().equals("DIRECT")) {
-					return; // no proxy required
-				}else {
-					
-					InetSocketAddress address = new InetSocketAddress(cfwProxy.host, cfwProxy.port);
-					if(address.isUnresolved()) { 
-						continue;
-					};
-
-					
-					HttpHost proxy = new HttpHost(cfwProxy.host, cfwProxy.port);
-
-					DefaultProxyRoutePlanner routePlanner = new DefaultProxyRoutePlanner(proxy);
-					clientBuilder.setRoutePlanner(routePlanner);
-				}
-				return ; // done
-			}
-			
-			//-------------------------------------
-			// None of the addresses were resolved
-			logger
-			.warn("The proxy addresses couldn't be resolved.");
+		//--------------------------------
+		// Check Do nothing
+		if(proxyPacFile.get() == null) {
+			return; 
 		}
-
-		return ;
 		
+	    clientBuilder.setRoutePlanner(new HttpRoutePlanner() {
+			
+			@Override
+			public HttpRoute determineRoute(HttpHost target, HttpContext context) throws HttpException {
+				
+				//----------------------------------
+				// Build full target URL from HttpHost
+				String scheme = target.getSchemeName();
+				String host = target.getHostName();
+				int port = target.getPort();
+				boolean isSecure = "https".equalsIgnoreCase(scheme);
+				
+				StringBuilder urlBuilder = new StringBuilder();
+				urlBuilder.append(scheme).append("://").append(host);
+				
+				if (port > 0) {
+				    urlBuilder.append(":").append(port);
+				}
+				
+				String url = urlBuilder.toString();
+                
+				//----------------------------------
+				// Doing this because someone had the
+				// grandiose idea to throw an exception
+				// when the port is not set(-1).
+				int finalPort = port;
+				if (port <= 0) {
+					if(isSecure) {	finalPort = 443; }
+					else		 {	finalPort = 80; }
+						
+				}
+				HttpHost finalTarget = new HttpHost(scheme, host, finalPort);
+				
+				//----------------------------------
+				// Check has Proxy PAC
+				if(proxyPacFile.get() == null) {
+					return new HttpRoute(finalTarget); 
+				}
+				
+				//----------------------------------
+				// Resolve proxies for THIS request
+				ArrayList<PFRProxy> proxiesArray = getProxies(url);
+
+				//----------------------------------
+				// No proxy → DIRECT
+				if (proxiesArray == null || proxiesArray.isEmpty()) {
+				    return new HttpRoute(finalTarget);
+				}
+				
+				//--------------------------------------------------
+				// Iterate PAC Proxies until address is resolved
+				for(PFRProxy cfwProxy : proxiesArray) {
+					
+					if(cfwProxy.type.trim().toUpperCase().equals("DIRECT")) {
+						return new HttpRoute(finalTarget); // no proxy required
+					}else {
+						
+						InetSocketAddress address = new InetSocketAddress(cfwProxy.host, cfwProxy.port);
+						if(address.isUnresolved()) { 
+							continue;
+						};
+
+						HttpHost proxy = new HttpHost(cfwProxy.host, cfwProxy.port);
+
+						return new HttpRoute(finalTarget, null, proxy, isSecure);
+					}
+				}
+				
+				//-------------------------------------
+				// None of the addresses were resolved
+				logger.warn("The proxy addresses couldn't be resolved.");
+				
+				return new HttpRoute(target);
+			}
+		});
+	    
 	}
 		
 	/******************************************************************************************************
@@ -772,19 +816,36 @@ public class PFRHttp {
 	 * 
 	 ******************************************************************************************************/
 	public static PoolingHttpClientConnectionManager getConnectionManager() {
-		if(connectionManager == null) {
-			connectionManager = new PoolingHttpClientConnectionManager();
-			connectionManager.setMaxTotal(1000);
-			connectionManager.setDefaultMaxPerRoute(50);
-
-			connectionManager.setDefaultConnectionConfig(
-					ConnectionConfig.custom()
-				        .setConnectTimeout( Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
-				        .setSocketTimeout(Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
-				        .build()
-			        );
-		}
 		
+		synchronized (logger) {
+			
+			if(connectionManager == null) {
+
+				try{
+					connectionManager = new PoolingHttpClientConnectionManager(getSocketFactoryRegistry());
+				}catch(Exception e) {
+					connectionManager = new PoolingHttpClientConnectionManager();
+				}
+				
+				connectionManager.setMaxTotal(1000);
+				connectionManager.setDefaultMaxPerRoute(50);
+
+				
+				connectionManager.setDefaultConnectionConfig(
+						ConnectionConfig.custom()
+					        .setConnectTimeout( Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
+					        .setSocketTimeout(Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
+					        .build()
+				        );
+				
+				connectionManager.setDefaultSocketConfig(SocketConfig.custom()
+						    .setSoKeepAlive(true)
+						    .setTcpNoDelay(true)
+						    .setSoLinger(TimeValue.ofSeconds(5))
+						    .build()
+					    );
+			}
+		}
 		return connectionManager;
 	}
 	
@@ -918,7 +979,7 @@ public class PFRHttp {
 	 * Set SSL Context
 	 * 
 	 **************************************************************************************/
-	public static void setSSLContext(HttpClientBuilder builder) throws Exception {
+	private static Registry<ConnectionSocketFactory> getSocketFactoryRegistry() throws Exception {
 		
 		//=====================================================
 		// Initialize Connection Manager
@@ -943,16 +1004,7 @@ public class PFRHttp {
 		        .register("http", new PlainConnectionSocketFactory() )
 		        .build();
 			
-			//-------------------------------
-			// Connection Manager
-			BasicHttpClientConnectionManager trustAllAndClientCertConnectionManager =
-						new BasicHttpClientConnectionManager(socketFactoryRegistry);
-		
-		//=====================================================
-		// Add to Builder
-		//=====================================================
-	    builder.setConnectionManager(trustAllAndClientCertConnectionManager);
-
+			return socketFactoryRegistry;
 	}
 	
 	protected class PFRProxy {
