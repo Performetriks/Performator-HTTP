@@ -22,8 +22,10 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
+import org.apache.hc.client5.http.ConnectionKeepAliveStrategy;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
+import org.apache.hc.client5.http.impl.DefaultConnectionKeepAliveStrategy;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
 import org.apache.hc.client5.http.impl.io.BasicHttpClientConnectionManager;
@@ -39,6 +41,7 @@ import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.hc.core5.ssl.TrustStrategy;
+import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 import org.graalvm.polyglot.Value;
 import org.slf4j.LoggerFactory;
@@ -82,6 +85,8 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> keystorePath = new InheritableThreadLocal<>();
 	private static InheritableThreadLocal<String> keystorePW = new InheritableThreadLocal<>();
 	private static InheritableThreadLocal<String> keystoreManagerPW = new InheritableThreadLocal<>();
+	
+	private static InheritableThreadLocal<String> defaultUserAgent = new InheritableThreadLocal<>();
 	
 	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
 		@Override
@@ -272,6 +277,23 @@ public class PFRHttp {
 	 ******************************************************************************************************/
 	public static long defaultSocketTimeout() {
 		return defaultSocketTimeoutMillis.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Set the default user agent header used for all the requests of the current thread.
+	 * 
+	 ******************************************************************************************************/
+	public static void defaultUserAgent(String userAgent) {
+		defaultUserAgent.set(userAgent);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Returns the default user agent header used for all the requests of the current thread.
+	 ******************************************************************************************************/
+	public static String defaultUserAgent() {
+		return defaultUserAgent.get();
 	}
 
 	
@@ -754,7 +776,7 @@ public class PFRHttp {
 			connectionManager = new PoolingHttpClientConnectionManager();
 			connectionManager.setMaxTotal(1000);
 			connectionManager.setDefaultMaxPerRoute(50);
-			
+
 			connectionManager.setDefaultConnectionConfig(
 					ConnectionConfig.custom()
 				        .setConnectTimeout( Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
@@ -888,6 +910,8 @@ public class PFRHttp {
     	}
 
     }
+    
+    
     
     
 	/**************************************************************************************

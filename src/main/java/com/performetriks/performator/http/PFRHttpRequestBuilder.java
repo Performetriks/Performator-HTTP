@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.hc.client5.http.ConnectionKeepAliveStrategy;
 import org.apache.hc.client5.http.SystemDefaultDnsResolver;
 import org.apache.hc.client5.http.auth.AuthSchemeFactory;
 import org.apache.hc.client5.http.auth.AuthScope;
@@ -94,10 +95,19 @@ public class PFRHttpRequestBuilder {
 	HashMap<String, String> params = new HashMap<>();
 	HashMap<String, String> headers = new HashMap<>();
 	
+	private ConnectionKeepAliveStrategy keepAliveStrategy = (response, context) -> {
+	    return TimeValue.ofSeconds(60); // force reuse window
+	};
+	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
 	public PFRHttpRequestBuilder(String urlNoParams) {
 		this.URL = urlNoParams;
 	}
-	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
 	public PFRHttpRequestBuilder(String metricName, String urlNoParams) {
 		this.metricName = metricName;
 		this.URL = urlNoParams;
@@ -887,9 +897,12 @@ public class PFRHttpRequestBuilder {
 			HttpClientBuilder clientBuilder = 
 						HttpClientBuilder.create()
 								.setDefaultCookieStore(PFRHttp.cookieStore.get())
+								.setConnectionManagerShared(true)
 								.setConnectionManager(PFRHttp.getConnectionManager())
-								.evictExpiredConnections()
-								.evictIdleConnections(TimeValue.ofSeconds(30))
+								.setUserAgent(PFRHttp.defaultUserAgent())
+								.setKeepAliveStrategy(keepAliveStrategy)
+								//.evictExpiredConnections()
+								//.evictIdleConnections(TimeValue.ofSeconds(30))
 								;
 			
 			
