@@ -828,7 +828,7 @@ public class PFRHttp {
 				}
 				
 				connectionManager.setMaxTotal(1000);
-				connectionManager.setDefaultMaxPerRoute(50);
+				connectionManager.setDefaultMaxPerRoute(200);
 
 				
 				connectionManager.setDefaultConnectionConfig(
