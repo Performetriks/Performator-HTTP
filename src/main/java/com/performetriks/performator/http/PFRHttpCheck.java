@@ -3,7 +3,7 @@ package com.performetriks.performator.http;
 import com.performetriks.performator.base.PFRContext;
 import com.performetriks.performator.http.PFRHttp.PFRHttpSection;
 import com.xresch.hsr.base.HSR;
-import com.xresch.hsr.utils.HSRText.CheckType;
+import com.xresch.xrutils.utils.XRText.CheckType;
 
 /***************************************************************************
  * 

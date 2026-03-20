@@ -45,8 +45,8 @@ import com.performetriks.performator.http.PFRHttp.PFRHttpAuthMethod;
 import com.xresch.hsr.stats.HSRExpression.Operator;
 import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
 import com.xresch.hsr.stats.HSRSLA;
-import com.xresch.hsr.utils.ByteSize;
-import com.xresch.hsr.utils.HSRText.CheckType;
+import com.xresch.xrutils.data.ByteSize;
+import com.xresch.xrutils.utils.XRText.CheckType;
 
 /*******************************************************************************************************
  * 

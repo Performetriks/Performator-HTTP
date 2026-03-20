@@ -27,7 +27,6 @@ import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
-import org.apache.hc.client5.http.impl.io.BasicHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.routing.HttpRoutePlanner;
 import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
@@ -52,7 +51,7 @@ import com.google.common.base.Strings;
 import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
-import com.xresch.hsr.utils.HSRTime.HSRTimeUnit;
+import com.xresch.xrutils.utils.XRTime.XRTimeUnit;
 
 import ch.qos.logback.classic.Logger;
 
@@ -101,7 +100,7 @@ public class PFRHttp {
 		@Override
 	    protected Long initialValue() {
 			//default timeout of  3 minutes
-	        return HSRTimeUnit.m.toMillis(3);
+	        return XRTimeUnit.m.toMillis(3);
 	    }
 	};
 	
@@ -109,7 +108,7 @@ public class PFRHttp {
 		@Override
 		protected Long initialValue() {
 			//default timeout of  10 s
-			return HSRTimeUnit.s.toMillis(10);
+			return XRTimeUnit.s.toMillis(10);
 		}
 	};
 	
@@ -117,7 +116,7 @@ public class PFRHttp {
 		@Override
 		protected Long initialValue() {
 			//default timeout of 30 s
-			return HSRTimeUnit.s.toMillis(30);
+			return XRTimeUnit.s.toMillis(30);
 		}
 	};
 	

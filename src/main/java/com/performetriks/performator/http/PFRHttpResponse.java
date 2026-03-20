@@ -32,7 +32,7 @@ import com.performetriks.performator.http.PFRHttpRequestBuilder.Range;
 import com.xresch.hsr.base.HSR;
 import com.xresch.hsr.stats.HSRRecord;
 import com.xresch.hsr.stats.HSRRecord.HSRRecordStatus;
-import com.xresch.hsr.utils.ByteSize;
+import com.xresch.xrutils.data.ByteSize;
 
 import ch.qos.logback.classic.Logger;
 
