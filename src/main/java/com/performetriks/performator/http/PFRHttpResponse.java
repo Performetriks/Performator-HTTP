@@ -238,7 +238,7 @@ public class PFRHttpResponse {
 			.append(p+"Cookies:     " + cookieHeader)
 			.append(p+"Body: " + ( (request.body == null) ? "" : p + request.body.replace("\n", p)) )
 			.append(p+"---------------- RESPONSE ----------------")
-			.append(p+"Status:     " + this.getStatus() +" "+ this.getStatusReason())
+			.append(p+"Status:     " + this.getStatusWithReason() )
 			.append(p+"Checks OK:  " + this.checksSuccessful())
 			.append(p+"HasError:   " + this.hasError()).append( ( (errorMessage == null) ? "" : ", Error: " + errorMessage.replace("\n", p)) )
 			.append(p+"Headers:    " + this.getHeadersAsJson().toString())
@@ -523,8 +523,20 @@ public class PFRHttpResponse {
 	/******************************************************************************************************
 	 * 
 	 ******************************************************************************************************/
+	public String getStatusWithReason() {
+		return status + " " + getStatusReason();
+	}
+	
+	
+	/******************************************************************************************************
+	 * 
+	 ******************************************************************************************************/
 	public String getStatusReason() {
-		return EnglishReasonPhraseCatalog.INSTANCE.getReason(status, null);
+		if(status >= 0) {
+			return EnglishReasonPhraseCatalog.INSTANCE.getReason(status, null);
+		}
+		
+		return "";
 	}
 	
 

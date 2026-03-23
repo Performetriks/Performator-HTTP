@@ -15,7 +15,13 @@ public class ResponseFailedException extends RuntimeException {
 	private PFRHttpResponse response;
 	
 	public ResponseFailedException(PFRHttpResponse r) {
+		super( (r.hasError()) 
+					? r.errorMessage() 
+					: "HTTP Status: " + r.getStatusWithReason()
+				);
+		
 		response = r;
+
 	}
 	
 	public PFRHttpResponse getResponse() {
