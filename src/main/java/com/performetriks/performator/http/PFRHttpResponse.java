@@ -15,6 +15,7 @@ import org.apache.hc.core5.http.ClassicHttpResponse;
 import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpException;
+import org.apache.hc.core5.http.impl.EnglishReasonPhraseCatalog;
 import org.apache.hc.core5.http.io.HttpClientResponseHandler;
 import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.hc.core5.http.protocol.HttpContext;
@@ -52,7 +53,7 @@ public class PFRHttpResponse {
 	CloseableHttpClient httpClient = null;
 	private URL url;
 	String body;
-	private int status = -1;
+	private int status = -1;		// HTTP Status code like 200, 302 etc
 	
 	private Header[] headers;
 	private JsonObject headersAsJsonCached;
@@ -222,32 +223,34 @@ public class PFRHttpResponse {
 		
 		String p = "\n### ";
 		StringBuilder builder = new StringBuilder();
-		builder.append("Debug Log");
-		builder.append("\n########");
-		builder.append("\n##################");
-		builder.append("\n#########################################");
-		builder.append("\n###################################################################################");
-		builder.append(p+"Metric Name: "+request.metricName);
-		builder.append(p+"Thread Name: ["+Thread.currentThread().getName()+"]");
-		builder.append(p+"Log Details: "+PFRContext.logDetailsString().trim() );
-		builder.append(p+"Duration:    "+getDuration()+" ms");
-		builder.append(p+"---------------- REQUEST ----------------");
-		builder.append(p+"Method:      "+request.method);
-		builder.append(p+"URL:         "+request.URL);
-		builder.append(p+"URL Final:   "+request.buildURLwithParams());
-		builder.append(p+"Params:      "+paramsString);
-		builder.append(p+"Headers:     "+headersString);
-		builder.append(p+"Cookies:     "+cookieHeader);
-		builder.append(p+"Body: "+( (request.body == null) ? "" : p + request.body.replace("\n", p)) );
-		builder.append(p+"---------------- RESPONSE ----------------");
-		builder.append(p+"Status:     "+this.getStatus());
-		builder.append(p+"Checks OK:  "+this.checksSuccessful()).append(", HasError: "+this.hasError()).append( ( (errorMessage == null) ? "" : ", Error: " + errorMessage.replace("\n", p)) );
-		builder.append(p+"Headers:    "+this.getHeadersAsJson().toString());
-		builder.append(p+"Body:"+ ( (body == null) ? "" : p + body.replace("\n", p)) );
-		builder.append("\n###################################################################################");
-		builder.append("\n#########################################");
-		builder.append("\n##################");
-		builder.append("\n########\n");
+		builder.append("Debug Log")
+			.append("\n########")
+			.append("\n##################")
+			.append("\n#########################################")
+			.append("\n###################################################################################")
+			.append(p+"Metric Name: "+request.metricName)
+			.append(p+"Thread Name: ["+Thread.currentThread().getName()+"]")
+			.append(p+"Log Details: "+PFRContext.logDetailsString().trim() )
+			.append(p+"Duration:    "+getDuration()+" ms")
+			.append(p+"---------------- REQUEST ----------------")
+			.append(p+"Method:      " + request.method)
+			.append(p+"URL:         " + request.URL)
+			.append(p+"URL Final:   " + request.buildURLwithParams())
+			.append(p+"Params:      " + paramsString)
+			.append(p+"Headers:     " + headersString)
+			.append(p+"Cookies:     " + cookieHeader)
+			.append(p+"Body: " + ( (request.body == null) ? "" : p + request.body.replace("\n", p)) )
+			.append(p+"---------------- RESPONSE ----------------")
+			.append(p+"Status:     " + this.getStatus() +" "+ this.getStatusReason())
+			.append(p+"Checks OK:  " + this.checksSuccessful())
+			.append(p+"HasError:   " + this.hasError()).append( ( (errorMessage == null) ? "" : ", Error: " + errorMessage.replace("\n", p)) )
+			.append(p+"Headers:    " + this.getHeadersAsJson().toString())
+			.append(p+"Body:"+ ( (body == null) ? "" : p + body.replace("\n", p)) )
+			.append("\n###################################################################################")
+			.append("\n#########################################")
+			.append("\n##################")
+			.append("\n########\n")
+			;
 
 		PFRHttp.logger.info(builder.toString());
 	}
@@ -518,6 +521,13 @@ public class PFRHttpResponse {
 	 ******************************************************************************************************/
 	public int getStatus() {
 		return status;
+	}
+	
+	/******************************************************************************************************
+	 * 
+	 ******************************************************************************************************/
+	public String getStatusReason() {
+		return EnglishReasonPhraseCatalog.INSTANCE.getReason(status, null);
 	}
 	
 
