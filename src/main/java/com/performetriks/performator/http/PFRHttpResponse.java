@@ -122,9 +122,7 @@ public class PFRHttpResponse {
 			//--------------------------
 			// End Measurement	
 			if(metric != null) {
-				record = HSR.end(isSuccess())
-							.code(""+status)
-							; 
+				record = HSR.end( isSuccess(), ""+status); 
 			}
 			
 			//--------------------------
@@ -170,8 +168,7 @@ public class PFRHttpResponse {
 			responseLogger.warn(errorMessage, e);
 			
 			if(metric != null) { 
-				record = HSR.end(false)
-							.code(""+status);
+				record = HSR.end(false, ""+status);
 			}
 
 			
