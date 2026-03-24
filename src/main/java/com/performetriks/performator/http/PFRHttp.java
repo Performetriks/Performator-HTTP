@@ -11,6 +11,7 @@ import java.net.Proxy;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
@@ -94,6 +95,13 @@ public class PFRHttp {
 	    protected BasicCookieStore initialValue() {
 	        return new BasicCookieStore();
 	    }
+	};
+	
+	private static InheritableThreadLocal<Charset> defaultBodyCharset =  new InheritableThreadLocal<>() { 
+		@Override
+		protected Charset initialValue() {
+			return StandardCharsets.UTF_8;
+		}
 	};
 	
 	private static InheritableThreadLocal<Long> defaultResponseTimeoutMillis =  new InheritableThreadLocal<>() { 
@@ -231,6 +239,24 @@ public class PFRHttp {
 	
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Set the default charset for all the request bodies of the current thread. This value will be ignored
+	 * if a charset is set inside the content-type header.
+	 ******************************************************************************************************/
+	public static void defaultBodyCharset(Charset charset) {
+		defaultBodyCharset.set(StandardCharsets.UTF_8);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Returns the default charset for all the request bodies of the current thread.This value will be ignored
+	 * if a charset is set inside the content-type header.
+	 ******************************************************************************************************/
+	public static Charset defaultBodyCharset() {
+		return defaultBodyCharset.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Set the default response timeout used for all the requests of the current thread.
 	 ******************************************************************************************************/
 	public static void defaultResponseTimeout(long millis) {
@@ -246,26 +272,26 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
-	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * <b>Scope:</b> Global <br>
 	 * <b>IMPORTANT:</b> This method has to be called before the first request is sent.<br>
-	 * Set the default connect timeout used for all the requests of the current thread.
+	 * Set the default connect timeout used for all the requests globally.
 	 ******************************************************************************************************/
 	public static void defaultConnectTimeout(long millis) {
 		defaultConnectTimeoutMillis.set(millis);
 	}
 	
 	/******************************************************************************************************
-	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Returns the default connect timeout for all the requests of the current thread.
+	 * <b>Scope:</b> Global <br>
+	 * Returns the default connect timeout for all the requests globally.
 	 ******************************************************************************************************/
 	public static long defaultConnectTimeout() {
 		return defaultConnectTimeoutMillis.get();
 	}
 	
 	/******************************************************************************************************
-	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * <b>Scope:</b> Global <br>
 	 * <b>IMPORTANT:</b> This method has to be called before the first request is sent.<br>
-	 * Set the default socket timeout used for all the requests of the current thread.
+	 * Set the default socket timeout used for all the requests globally.
 	 * 
 	 ******************************************************************************************************/
 	public static void defaultSocketTimeout(long millis) {
@@ -273,16 +299,16 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
-	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Returns the default socket timeout for all the requests of the current thread.
+	 * <b>Scope:</b> Global <br>
+	 * Returns the default socket timeout for all the requests globally.
 	 ******************************************************************************************************/
 	public static long defaultSocketTimeout() {
 		return defaultSocketTimeoutMillis.get();
 	}
 	
 	/******************************************************************************************************
-	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Set the default user agent header used for all the requests of the current thread.
+	 * <b>Scope:</b> Global <br>
+	 * Set the default user agent header used for all the requests globally.
 	 * 
 	 ******************************************************************************************************/
 	public static void defaultUserAgent(String userAgent) {
@@ -290,8 +316,8 @@ public class PFRHttp {
 	}
 	
 	/******************************************************************************************************
-	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Returns the default user agent header used for all the requests of the current thread.
+	 * <b>Scope:</b> Global <br>
+	 * Returns the default user agent header used for all the requests globally.
 	 ******************************************************************************************************/
 	public static String defaultUserAgent() {
 		return defaultUserAgent.get();
@@ -833,7 +859,7 @@ public class PFRHttp {
 				connectionManager.setDefaultConnectionConfig(
 						ConnectionConfig.custom()
 					        .setConnectTimeout( Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
-					        .setSocketTimeout(Timeout.ofMilliseconds(PFRHttp.defaultConnectTimeout()) )
+					        .setSocketTimeout(Timeout.ofMilliseconds(PFRHttp.defaultSocketTimeout()) )
 					        .build()
 				        );
 				

@@ -207,7 +207,7 @@ public class PFRHttpResponse {
 	public void printDebugLog() {
 		
 		String paramsString = (request.params == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.params);
-		String headersString = (request.headers == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.headers);
+		String headersString = (request.lowercaseHeaders == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.lowercaseHeaders);
 		
 		CookieStore cookies = PFRHttp.cookieStore.get();
 		

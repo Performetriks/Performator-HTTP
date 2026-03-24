@@ -2,6 +2,8 @@ package com.performetriks.performator.http;
 
 import java.math.BigDecimal;
 import java.net.URI;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -30,6 +32,7 @@ import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.protocol.HttpClientContext;
+import org.apache.hc.core5.http.ContentType;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.impl.DefaultConnectionReuseStrategy;
@@ -48,6 +51,7 @@ import com.xresch.hsr.stats.HSRSLA;
 import com.xresch.xrutils.data.ByteSize;
 import com.xresch.xrutils.utils.XRText.CheckType;
 
+
 /*******************************************************************************************************
  * 
  * Copyright Owner: Performetriks GmbH, Switzerland
@@ -60,10 +64,9 @@ public class PFRHttpRequestBuilder {
 	
 	private static final String SYNC_LOCK_CLIENT = "Sync Lock Client";
 	
-	private static final String HEADER_CONTENT_TYPE = "Content-Type";
+	private static final String HEADER_CONTENT_TYPE = "content-type";
 	
 	private static CloseableHttpClient httpClientSingle;
-	private static ThreadLocal<CloseableHttpClient> httpClient = new ThreadLocal<>();
 	
 	private PFRHttpAuthMethod authMethod = PFRHttpAuthMethod.BASIC;
 	private String username = null;
@@ -79,9 +82,7 @@ public class PFRHttpRequestBuilder {
 	String URL = null;
 	String body = null;
 	
-	String requestBodyContentType = "plain/text; charset=UTF-8";
-	private boolean autoCloseClient = true;
-	
+	Charset bodyCharset 		= PFRHttp.defaultBodyCharset();
 	long responseTimeoutMillis 	= PFRHttp.defaultResponseTimeout(); 
 	long pauseMillisLower 		= PFRHttp.defaultPauseLower(); 
 	long pauseMillisUpper 		= PFRHttp.defaultPauseUpper(); 
@@ -94,7 +95,7 @@ public class PFRHttpRequestBuilder {
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
 	
 	HashMap<String, String> params = new HashMap<>();
-	HashMap<String, String> headers = new HashMap<>();
+	HashMap<String, String> lowercaseHeaders = new HashMap<>();
 		
 	/***************************************************************************
 	 * 
@@ -175,7 +176,7 @@ public class PFRHttpRequestBuilder {
 	 * Add a header
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder header(String name, String value) {
-		headers.put(name, value);
+		lowercaseHeaders.put(name.trim().toLowerCase(), value);
 		return this;
 	}
 	
@@ -187,7 +188,9 @@ public class PFRHttpRequestBuilder {
 		
 		if(headerMap == null) { return this; }
 		
-		this.headers.putAll(headerMap);
+		for(Entry<String, String> entry : headerMap.entrySet()) {
+			header(entry.getKey(), entry.getValue());
+		}
 		return this;
 		
 	}
@@ -287,20 +290,6 @@ public class PFRHttpRequestBuilder {
 		return this;
 	}
 	
-	/***************************************************************************
-	 * Toggle autoCloseClient
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder autoCloseClient(boolean autoCloseClient) {
-		this.autoCloseClient = autoCloseClient;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Get autoCloseClient
-	 ***************************************************************************/
-	public boolean autoCloseClient() {
-		return this.autoCloseClient;
-	}
 		
 	/***************************************************************************
 	 * Set Basic Authentication
@@ -330,10 +319,19 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
+	 * Define a charset for the body. (Default: UTF-8) <br>
+	 * This charset will be ignored if the charset is defined
+	 * in the content-type header.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder bodyCharset(Charset charset) {
+		this.bodyCharset = charset;
+		return this;
+	}
+	
+	/***************************************************************************
 	 * Add a request Body
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder body(String contentType, String content) {
-		this.requestBodyContentType = contentType;
 		this.header(HEADER_CONTENT_TYPE, contentType);
 		this.body = content;
 		return this;
@@ -918,12 +916,22 @@ public class PFRHttpRequestBuilder {
 					);
 			
 			//-----------------------------------
-			// Handle POST Body
-			if(body != null) {
-				
-				StringEntity bodyEntity = new StringEntity(body);
-				requestBase.setEntity(bodyEntity);
-				
+			// Handle POST Body			
+			if (body != null) {
+
+			    ContentType type;
+
+			    if (!lowercaseHeaders.containsKey(HEADER_CONTENT_TYPE)) {
+			        type = ContentType.create("text/plain", bodyCharset);
+			    } else {
+			        type = ContentType.parse(lowercaseHeaders.get(HEADER_CONTENT_TYPE));
+
+			        if (type.getCharset() == null) {
+			            type = type.withCharset(bodyCharset);
+			        }
+			    }
+
+			    requestBase.setEntity( new StringEntity(body, type) );
 			}
 			
 			//----------------------------------
@@ -965,7 +973,7 @@ public class PFRHttpRequestBuilder {
 					//------------------------------
 					// Basic 
 					case BASIC_HEADER:
-						PFRHttp.addBasicAuthorizationHeader(headers, username, new String(pwdArray));
+						PFRHttp.addBasicAuthorizationHeader(lowercaseHeaders, username, new String(pwdArray));
 					break;
 					
 					
@@ -1030,8 +1038,8 @@ public class PFRHttpRequestBuilder {
 			
 			//-----------------------------------
 			// Handle headers
-			if(headers != null ) {
-				for(Entry<String, String> header : headers.entrySet()) {
+			if(lowercaseHeaders != null ) {
+				for(Entry<String, String> header : lowercaseHeaders.entrySet()) {
 					// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
 					String name = header.getKey();
 					
