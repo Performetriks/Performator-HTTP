@@ -97,6 +97,8 @@ public class PFRHttp {
 	    }
 	};
 	
+	private static InheritableThreadLocal<HashMap<String, String>> defaultHeaders =  new InheritableThreadLocal<>();
+	
 	private static InheritableThreadLocal<Charset> defaultBodyCharset =  new InheritableThreadLocal<>() { 
 		@Override
 		protected Charset initialValue() {
@@ -237,6 +239,22 @@ public class PFRHttp {
 		return PFRHttp.throwOnFail.get();
 	}
 	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Set the default headers for all the requests of the current thread. These headers will always
+	 * be added first to any request and can be enhanced and overridden with any additional headers specified. 
+	 ******************************************************************************************************/
+	public static void defaultHeaders(HashMap<String, String> headers) {
+		defaultHeaders.set(headers);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Returns the default headers for all the requests of the current thread.
+	 ******************************************************************************************************/
+	public static HashMap<String, String> defaultHeaders() {
+		return defaultHeaders.get();
+	}
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Set the default charset for all the request bodies of the current thread. This value will be ignored

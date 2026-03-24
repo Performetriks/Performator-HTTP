@@ -101,7 +101,7 @@ public class PFRHttpRequestBuilder {
 	 * 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder(String urlNoParams) {
-		this.URL = urlNoParams;
+		this(null, urlNoParams);
 	}
 	/***************************************************************************
 	 * 
@@ -109,6 +109,12 @@ public class PFRHttpRequestBuilder {
 	public PFRHttpRequestBuilder(String metricName, String urlNoParams) {
 		this.metricName = metricName;
 		this.URL = urlNoParams;
+		
+		if(PFRHttp.defaultHeaders() != null) {
+			for(Entry<String, String> entry : PFRHttp.defaultHeaders().entrySet()) {
+				header(entry.getKey(), entry.getValue());
+			}
+		};
 	}
 	
 	/***************************************************************************
