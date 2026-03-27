@@ -46,6 +46,7 @@ import org.apache.hc.core5.ssl.TrustStrategy;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 import org.graalvm.polyglot.Value;
+import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
@@ -53,8 +54,6 @@ import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
 import com.xresch.xrutils.utils.XRTimeUnit;
-
-import ch.qos.logback.classic.Logger;
 
 /***************************************************************************
  * 
@@ -66,7 +65,7 @@ import ch.qos.logback.classic.Logger;
  ***************************************************************************/
 public class PFRHttp {
 	
-	static Logger logger = (ch.qos.logback.classic.Logger)LoggerFactory.getLogger(PFRHttp.class.getName());
+	static Logger logger = LoggerFactory.getLogger(PFRHttp.class.getName());
 				
 	// only one static connection pool, avoid ephemeral port exhaustion
 	private static PoolingHttpClientConnectionManager connectionManager = null;
@@ -241,8 +240,29 @@ public class PFRHttp {
 	
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
-	 * Set the default headers for all the requests of the current thread. These headers will always
-	 * be added first to any request and can be enhanced and overridden with any additional headers specified. 
+	 * Sets(overrides) the default headers for all the requests of the current thread. These headers will always
+	 * be added first to any request and can be enhanced and overridden with any additional headers specified
+	 * on the request. 
+	 * 
+	 * @param headersKeyValue params at odd positions are keys, params at even positions are values
+	 ******************************************************************************************************/
+	public static void defaultHeaders(String... headersKeyValue) {
+		
+		HashMap<String, String> headers = new HashMap<>();
+		for(int i = 0; i < headersKeyValue.length; i += 2) {
+			headers.put(headersKeyValue[i], headersKeyValue[i+1]);
+		}
+		
+		defaultHeaders.set(headers);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Sets(overrides) the default headers for all the requests of the current thread. These headers will always
+	 * be added first to any request and can be enhanced and overridden with any additional headers specified
+	 * on the request. 
+	 * 
+	 * @param map of values
 	 ******************************************************************************************************/
 	public static void defaultHeaders(HashMap<String, String> headers) {
 		defaultHeaders.set(headers);
