@@ -21,11 +21,13 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map.Entry;
 
 import org.apache.hc.client5.http.HttpRoute;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
+import org.apache.hc.client5.http.cookie.Cookie;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
@@ -857,6 +859,16 @@ public class PFRHttp {
 	 ******************************************************************************************************/
 	public static void addCookie(BasicClientCookie cookie) {
 		cookieStore.get().addCookie(cookie);
+	}
+	
+	/******************************************************************************************************
+	 * Returns an immutable array of {@link Cookie cookies} that this HTTP
+     * state currently contains.
+     * 
+	 * @return list of cookies, baked well without sugar
+	 ******************************************************************************************************/
+	public static List<Cookie> getCookies() {
+		return cookieStore.get().getCookies();
 	}
 	
 	/******************************************************************************************************
