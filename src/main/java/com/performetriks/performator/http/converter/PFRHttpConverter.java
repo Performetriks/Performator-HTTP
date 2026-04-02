@@ -996,7 +996,7 @@ package com.performetriks.performator.quickstart.usecase;
 
 import java.util.LinkedHashMap;
 import com.performetriks.performator.base.PFRUsecase;
-import com.performetriks.performator.data.PFRDataRecord;
+import com.xresch.xrutils.data.Unrecord;
 import com.performetriks.performator.http.PFRHttp;
 import com.performetriks.performator.http.PFRHttpResponse;
 import com.performetriks.performator.http.ResponseFailedException;
@@ -1082,7 +1082,7 @@ public class UsecaseConverted extends PFRUsecase {
 		sb.append(postfix).append("// Variables");
 		sb.append(postfix).append("//---------------------------------------------");
 		sb.append(postfix).append("PFRDataSource source = Globals.DATASOURCE; // manual adjustment needed");
-		sb.append(postfix).append("PFRDataRecord data = source.next();");
+		sb.append(postfix).append("Unrecord data = source.next();");
 		
 		if( ! separateResponses ) {
 			sb.append(postfix).append("PFRHttpResponse r = null;\r\n");
@@ -1151,7 +1151,7 @@ public class UsecaseConverted extends PFRUsecase {
 				sb.append("	/***************************************************************************\n");
 				sb.append("	 * \n");
 				sb.append("	 ***************************************************************************/\n");
-				sb.append("	public PFRHttpResponse ").append(methodName).append("(PFRDataRecord data) throws ResponseFailedException {\n");
+				sb.append("	public PFRHttpResponse ").append(methodName).append("(Unrecord data) throws ResponseFailedException {\n");
 				sb.append("		return "+generateRequestBuilderBody(req, index, separateHeaders, separateParams));
 				sb.append("\n	}\n\n");
 				index++;
