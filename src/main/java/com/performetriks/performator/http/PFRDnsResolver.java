@@ -30,15 +30,6 @@ public class PFRDnsResolver implements DnsResolver {
 	@Override
 	public InetAddress[] resolve(String host) throws UnknownHostException {
 
-		// Map the domain to actual Node IPs to bypass flapping LoadBalancer VIP
-		if ("jpetstore.perfluencer.pl".equalsIgnoreCase(host)) {
-			return new InetAddress[] {
-				InetAddress.getByAddress(new byte[] {(byte)192, (byte)168, (byte)1, (byte)122}),
-				InetAddress.getByAddress(new byte[] {(byte)192, (byte)168, (byte)1, (byte)126}),
-				InetAddress.getByAddress(new byte[] {(byte)192, (byte)168, (byte)1, (byte)130})
-			};
-		}
-
 		String metric = PFRHttp.currentMetricName();
 
 		if (metric != null) {
