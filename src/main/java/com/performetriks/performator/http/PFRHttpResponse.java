@@ -82,6 +82,11 @@ public class PFRHttpResponse {
 		this.httpClient = httpClient;
 		
 		String metric = request.metricName;
+		
+		PFRHttp.currentMetricName(metric);
+		if(context != null) {
+			context.setAttribute("pfr.metric", metric);
+		}
 		//----------------------------------
 		// Get URL
 		try {
@@ -173,6 +178,7 @@ public class PFRHttpResponse {
 
 			
 		}finally {
+			PFRHttp.currentMetricName(null);
 			
 			//-----------------------------
 			// Write Debug Log
@@ -363,7 +369,7 @@ public class PFRHttpResponse {
 	 * @return String or null on error
 	 ******************************************************************************************************/
 	public String getBody() {
-		return body;
+		return (body == null) ? "" : body;
 	}
 	
 	/******************************************************************************************************

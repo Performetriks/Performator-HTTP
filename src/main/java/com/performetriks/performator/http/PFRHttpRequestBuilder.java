@@ -3,10 +3,12 @@ package com.performetriks.performator.http;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -897,6 +899,25 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
+	 * Build and send the request asynchronously. Returns a 
+	 * CompletableFuture<PRFHttpResponse>.
+	 ***************************************************************************/
+	public CompletableFuture<PFRHttpResponse> sendAsync() {
+		if (PFRHttp.defaultUseVirtualThreads()) {
+			try {
+				java.lang.reflect.Method m = Executors.class.getMethod("newVirtualThreadPerTaskExecutor");
+				ExecutorService virtualExec = (ExecutorService) m.invoke(null);
+				return CompletableFuture.supplyAsync(this::send, virtualExec);
+			} catch (Exception e) {
+				PFRHttp.logger.warn("Virtual Threads are not supported on this JVM. Falling back to standard ForkJoinPool.", e);
+				return CompletableFuture.supplyAsync(this::send);
+			}
+		} else {
+			return CompletableFuture.supplyAsync(this::send);
+		}
+	}
+	
+	/***************************************************************************
 	 * Build and send the request. Returns a 
 	 * PRFHttpResponse or null in case of errors.
 	 ***************************************************************************/
@@ -940,15 +961,9 @@ public class PFRHttpRequestBuilder {
 			    requestBase.setEntity( new StringEntity(body, type) );
 			}
 			
-			//----------------------------------
-	        // Create HTTP Context (per request!)
-	        HttpClientContext context = HttpClientContext.create();
-
 	        //----------------------------------
-	        // Set Cookie Store (per request)
-	        if (PFRHttp.cookieStore.get() != null) {
-	            context.setCookieStore(PFRHttp.cookieStore.get());
-	        }
+	        // Retrieve HTTP Context (cached per thread)
+	        HttpClientContext context = PFRHttp.httpContextStore.get();
 			
 		    //----------------------------------
 			// Set Auth mechanism
@@ -1058,8 +1073,17 @@ public class PFRHttpRequestBuilder {
 			//-----------------------------------
 			// Connect and create response
 
-			PFRHttpResponse response = new PFRHttpResponse(this, getClient(), requestBase, context);
-			return response;
+			PFRHttp.currentMetricName(metricName);
+			if (context != null) {
+				context.setAttribute("pfr.metric", metricName);
+			}
+
+			try {
+				PFRHttpResponse response = new PFRHttpResponse(this, getClient(), requestBase, context);
+				return response;
+			} finally {
+				PFRHttp.currentMetricName(null);
+			}
 			
 		
 		} catch (Throwable e) { 
