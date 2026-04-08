@@ -17,7 +17,7 @@ import com.xresch.hsr.base.HSR;
  * 
  * Decorator for ConnectionSocketFactory to measure connect time.
  * 
- * @author Reto Scheiwiller (Modified)
+ * @author Perfluencer
  * 
  ***************************************************************************/
 public class PFRSocketFactory implements ConnectionSocketFactory {
@@ -36,9 +36,9 @@ public class PFRSocketFactory implements ConnectionSocketFactory {
 	@Override
 	public Socket connectSocket(TimeValue connectTimeout, Socket socket, HttpHost host, InetSocketAddress remoteAddress,
 			InetSocketAddress localAddress, HttpContext context) throws IOException {
-		
+
 		String metric = PFRHttp.currentMetricName();
-		
+
 		if (metric != null) {
 			HSR.start(metric + "-Connect");
 			try {
@@ -50,7 +50,7 @@ public class PFRSocketFactory implements ConnectionSocketFactory {
 			return delegate.connectSocket(connectTimeout, socket, host, remoteAddress, localAddress, context);
 		}
 	}
-	
+
 	public static class PFRLayeredSocketFactory extends PFRSocketFactory implements LayeredConnectionSocketFactory {
 
 		public PFRLayeredSocketFactory(LayeredConnectionSocketFactory delegate) {
@@ -58,36 +58,41 @@ public class PFRSocketFactory implements ConnectionSocketFactory {
 		}
 
 		@Override
-		public Socket createLayeredSocket(Socket socket, String target, int port, HttpContext context) throws IOException {
-			
+		public Socket createLayeredSocket(Socket socket, String target, int port, HttpContext context)
+				throws IOException {
+
 			String metric = PFRHttp.currentMetricName();
 			if (metric != null) {
 				HSR.start(metric + "-TLS");
 				try {
-					return ((LayeredConnectionSocketFactory)delegate).createLayeredSocket(socket, target, port, context);
+					return ((LayeredConnectionSocketFactory) delegate).createLayeredSocket(socket, target, port,
+							context);
 				} finally {
 					HSR.end();
 				}
 			} else {
-				return ((LayeredConnectionSocketFactory)delegate).createLayeredSocket(socket, target, port, context);
+				return ((LayeredConnectionSocketFactory) delegate).createLayeredSocket(socket, target, port, context);
 			}
 		}
 
 		@Override
-		public Socket createLayeredSocket(Socket socket, String target, int port, Object attachment, HttpContext context)
+		public Socket createLayeredSocket(Socket socket, String target, int port, Object attachment,
+				HttpContext context)
 				throws IOException {
 			String metric = PFRHttp.currentMetricName();
 			if (metric != null) {
 				HSR.start(metric + "-TLS");
 				try {
-					return ((LayeredConnectionSocketFactory)delegate).createLayeredSocket(socket, target, port, attachment, context);
+					return ((LayeredConnectionSocketFactory) delegate).createLayeredSocket(socket, target, port,
+							attachment, context);
 				} finally {
 					HSR.end();
 				}
 			} else {
-				return ((LayeredConnectionSocketFactory)delegate).createLayeredSocket(socket, target, port, attachment, context);
+				return ((LayeredConnectionSocketFactory) delegate).createLayeredSocket(socket, target, port, attachment,
+						context);
 			}
 		}
-		
+
 	}
 }
