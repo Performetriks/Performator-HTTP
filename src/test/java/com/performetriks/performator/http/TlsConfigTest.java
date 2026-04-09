@@ -12,24 +12,24 @@ class TlsConfigTest {
     @BeforeEach
     void setUp() {
         // Reset defaults before each test
-        PFRHttp.defaultTrustAllCertificates(false);
+        PFRHttp.defaultTrustAllCertificates(true);
     }
 
     @AfterEach
     void tearDown() {
         // Reset defaults after each test
-        PFRHttp.defaultTrustAllCertificates(false);
-    }
-
-    @Test
-    void testDefaultValueSecure() {
-        assertFalse(PFRHttp.defaultTrustAllCertificates(), "Default TLS setting should be SECURE (false for trustAll)");
-    }
-
-    @Test
-    void testCustomValueInsecureForTesting() {
         PFRHttp.defaultTrustAllCertificates(true);
+    }
 
-        assertTrue(PFRHttp.defaultTrustAllCertificates(), "Custom TLS setting should allow trustAll");
+    @Test
+    void testDefaultValueTrusted() {
+        assertTrue(PFRHttp.defaultTrustAllCertificates(), "Default TLS setting should be TRUST ALL (true)");
+    }
+
+    @Test
+    void testCustomValueStrict() {
+        PFRHttp.defaultTrustAllCertificates(false);
+
+        assertFalse(PFRHttp.defaultTrustAllCertificates(), "Custom TLS setting should allow disabling trustAll");
     }
 }

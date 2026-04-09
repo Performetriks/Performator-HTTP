@@ -93,7 +93,7 @@ public class PFRHttp {
 	private static final AtomicInteger maxPerRouteConnections = new AtomicInteger(200);
 
 	// TLS configuration (global)
-	private static final AtomicBoolean trustAllCertificates = new AtomicBoolean(false);
+	private static final AtomicBoolean trustAllCertificates = new AtomicBoolean(true);
 
 	// Virtual thread support (global)
 	private static final AtomicBoolean useVirtualThreads = new AtomicBoolean(false);
