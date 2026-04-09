@@ -82,11 +82,6 @@ public class PFRHttpResponse {
 		this.httpClient = httpClient;
 		
 		String metric = request.metricName;
-		
-		PFRHttp.currentMetricName(metric);
-		if(context != null) {
-			context.setAttribute("pfr.metric", metric);
-		}
 		//----------------------------------
 		// Get URL
 		try {
@@ -178,7 +173,6 @@ public class PFRHttpResponse {
 
 			
 		}finally {
-			PFRHttp.currentMetricName(null);
 			
 			//-----------------------------
 			// Write Debug Log
@@ -281,20 +275,17 @@ public class PFRHttpResponse {
 		|| !this.checksSuccessful()
 		){ 
 			return false; 
-		}
+		};
 		
 		return true;
 	}
 	
 	/******************************************************************************************************
-	 * If the response has an error, this method will throw an exception. This can
-	 * be used to work with
+	 * If the response has an error, this method will throw an exception. This can be used to work with 
 	 * try-catch mechanisms to simplify code structures.
-	 * Calling this method directly will ignore the setting
-	 * PFRHttp.defaultThrowOnFail().
+	 * Calling this method directly will ignore the setting PFRHttp.defaultThrowOnFail().
 	 * 
-	 * The response that failed can be retrieved with
-	 * ResponseFailedException.getResponse().
+	 * The response that failed can be retrieved with ResponseFailedException.getResponse().
 	 ******************************************************************************************************/
 	public PFRHttpResponse throwOnFail() throws ResponseFailedException {
 		
@@ -335,8 +326,14 @@ public class PFRHttpResponse {
 		
 		String rangeName = record.name() + (suffix != null ? suffix : "" );
 		
-		HSR.addMetricRanged(rangeName, record.value(), rangeValue, rangeInitial)
-			.status(record.status());
+		HSR.addMetricRanged(
+				  rangeName
+				, record.value()
+				, rangeValue
+				, rangeInitial
+			)
+			.status(record.status())
+		;
 	}
 	
 	/******************************************************************************************************
@@ -363,7 +360,6 @@ public class PFRHttpResponse {
 	
 	/******************************************************************************************************
 	 * Get the body content of the response.
-	 * 
 	 * @return String or null on error
 	 ******************************************************************************************************/
 	public String getBody() {
@@ -372,28 +368,22 @@ public class PFRHttpResponse {
 	
 	/******************************************************************************************************
 	 * Get the response size of the response body as bytes in UTF-8 encoding.
-	 * 
 	 * @return size in bytes
 	 ******************************************************************************************************/
 	public long getBodySize() {
 		
-		if(body == null) {
-			return 0L;
-		}
+		if(body == null) { return 0L; }
 		
 		return body.getBytes(StandardCharsets.UTF_8).length;
 	}
 		
 	/******************************************************************************************************
 	 * Get the response size of the response body in UTF-8 encoding.
-	 * 
 	 * @return byteSize the byte size the result should represent 
 	 ******************************************************************************************************/
 	public BigDecimal getBodySize(ByteSize byteSize) {
 		
-		if(body == null) {
-			return BigDecimal.ZERO;
-		}
+		if(body == null) { return BigDecimal.ZERO; }
 
 		long contentLength = getBodySize();
 		BigDecimal converted = byteSize.convertBytes(contentLength, 1);
@@ -403,7 +393,6 @@ public class PFRHttpResponse {
 	
 	/******************************************************************************************************
 	 * Get the body content of the response as a JsonObject.
-	 * 
 	 * @param url used for the request.
 	 * @return JsonObject or null in case of issues
 	 ******************************************************************************************************/
@@ -438,7 +427,6 @@ public class PFRHttpResponse {
 	
 	/******************************************************************************************************
 	 * Get the body content of the response as a JsonObject.
-	 * 
 	 * @param url used for the request.
 	 * @return JsonObject or null in case of issues
 	 ******************************************************************************************************/
@@ -472,7 +460,6 @@ public class PFRHttpResponse {
 	
 	/******************************************************************************************************
 	 * Get the body content of the response as a JsonArray.
-	 * 
 	 * @param url used for the request.
 	 * @return JsonArray never null, empty array on error
 	 ******************************************************************************************************/
@@ -545,8 +532,7 @@ public class PFRHttpResponse {
 	
 
 	/******************************************************************************************************
-	 * Returns the approximate duration that was needed for executing and reading
-	 * the request.
+	 * Returns the approximate duration that was needed for executing and reading the request.
 	 ******************************************************************************************************/
 	public long getDuration() {
 		
@@ -579,7 +565,6 @@ public class PFRHttpResponse {
 	
 	/******************************************************************************************************
 	 * Returns the headers array retrieved from Apache Http Client.
-	 * 
 	 * @return headers of the response
 	 ******************************************************************************************************/
 	public Header[] getHeaders() {
@@ -587,10 +572,8 @@ public class PFRHttpResponse {
 	}
 	
 	/******************************************************************************************************
-	 * Converts the headers to a JsonObject and returns the object. The object will
-	 * contain all the headers
+	 * Converts the headers to a JsonObject and returns the object. The object will contain all the headers
 	 * as key/value pairs.
-	 * 
 	 * @return headers of the response as a JsonObject
 	 ******************************************************************************************************/
 	public JsonObject getHeadersAsJson() {
@@ -612,12 +595,9 @@ public class PFRHttpResponse {
 		
 		return headersAsJsonCached;
 	}
-
 	/******************************************************************************************************
-	 * Converts the headers to a LinkedHashMap and returns the object. The map will
-	 * contain all the headers
+	 * Converts the headers to a LinkedHashMap and returns the object. The map will contain all the headers
 	 * as key/value pairs.
-	 * 
 	 * @return headers of the response as a map
 	 ******************************************************************************************************/
 	public Map<String,String> getHeadersAsMap() {

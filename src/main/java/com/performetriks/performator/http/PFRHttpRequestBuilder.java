@@ -12,324 +12,307 @@ import java.util.concurrent.ExecutorService;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.apache.hc.client5.http.SystemDefaultDnsResolver;
-import org.apache.hc.client5.http.auth.AuthSchemeFactory;
 import org.apache.hc.client5.http.auth.AuthScope;
-import org.apache.hc.client5.http.auth.KerberosConfig;
-import org.apache.hc.client5.http.auth.KerberosCredentials;
-import org.apache.hc.client5.http.auth.NTCredentials;
-import org.apache.hc.client5.http.auth.StandardAuthScheme;
+import org.apache.hc.client5.http.auth.CredentialsProvider;
+import org.apache.hc.client5.http.auth.UsernamePasswordCredentials;
+import org.apache.hc.client5.http.classic.methods.HttpDelete;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpHead;
+import org.apache.hc.client5.http.classic.methods.HttpOptions;
+import org.apache.hc.client5.http.classic.methods.HttpPatch;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
+import org.apache.hc.client5.http.classic.methods.HttpTrace;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.config.RequestConfig;
-import org.apache.hc.client5.http.impl.auth.BasicScheme;
-import org.apache.hc.client5.http.impl.auth.BasicSchemeFactory;
-import org.apache.hc.client5.http.impl.auth.CredentialsProviderBuilder;
-import org.apache.hc.client5.http.impl.auth.DigestScheme;
-import org.apache.hc.client5.http.impl.auth.DigestSchemeFactory;
-import org.apache.hc.client5.http.impl.auth.KerberosScheme;
-import org.apache.hc.client5.http.impl.auth.KerberosSchemeFactory;
-import org.apache.hc.client5.http.impl.auth.NTLMScheme;
-import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
-import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
+import org.apache.hc.client5.http.impl.auth.BasicCredentialsProvider;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.http.ContentType;
-import org.apache.hc.core5.http.HttpHost;
-import org.apache.hc.core5.http.config.RegistryBuilder;
-import org.apache.hc.core5.http.impl.DefaultConnectionReuseStrategy;
+import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.io.entity.StringEntity;
-import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
-import org.ietf.jgss.GSSCredential;
-import org.ietf.jgss.GSSManager;
-import org.ietf.jgss.GSSName;
-import org.ietf.jgss.Oid;
 
+import com.google.common.base.Strings;
 import com.performetriks.performator.http.PFRHttp.PFRHttpAuthMethod;
-import com.xresch.hsr.stats.HSRExpression.Operator;
-import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
-import com.xresch.hsr.stats.HSRSLA;
+import com.performetriks.performator.http.PFRHttp.PFRHttpSection;
+import com.xresch.hsr.base.HSR;
 import com.xresch.xrutils.data.ByteSize;
-import com.xresch.xrutils.utils.XRText.CheckType;
 
-
-/*******************************************************************************************************
+/***************************************************************************
  * 
  * Copyright Owner: Performetriks GmbH, Switzerland
  * License: Eclipse Public License v2.0
  * 
  * @author Reto Scheiwiller
  * 
- *******************************************************************************************************/
+ ***************************************************************************/
 public class PFRHttpRequestBuilder {
+
+	protected String metricName = null;
+	protected String URL = null;
+	protected String method = "GET";
+	protected HashMap<String, String> params = null;
+	protected HashMap<String, String> lowercaseHeaders = null;
+	protected String body = null;
+	protected long sla = -1;
 	
-	private static final String SYNC_LOCK_CLIENT = "Sync Lock Client";
+	protected boolean autoFailOnHTTPErrors = false;
+	protected boolean autoDecompressResponse = true;
+
+	protected long pauseMillisLower = PFRHttp.defaultPauseLower();
+	protected long pauseMillisUpper = PFRHttp.defaultPauseUpper();
 	
-	private static final String HEADER_CONTENT_TYPE = "content-type";
-	
-	private static CloseableHttpClient httpClientSingle;
-	
-	private PFRHttpAuthMethod authMethod = PFRHttpAuthMethod.BASIC;
-	private String username = null;
-	private char[] pwdArray = null;
-	
-	boolean autoFailOnHTTPErrors = true;
-	boolean disableFollowRedirects = false;
-	
-	ByteSize measuredSize = null;
-	
-	String metricName = null;
-	String method = "GET";
-	String URL = null;
-	String body = null;
-	
-	Charset bodyCharset 		= PFRHttp.defaultBodyCharset();
-	long responseTimeoutMillis 	= PFRHttp.defaultResponseTimeout(); 
-	long pauseMillisLower 		= PFRHttp.defaultPauseLower(); 
-	long pauseMillisUpper 		= PFRHttp.defaultPauseUpper(); 
-	boolean throwOnFail 		= PFRHttp.defaultThrowOnFail();
-	
-	record Range (String suffix, int rangeValue, int rangeInitial) {};
-	ArrayList<Range> ranges;
-	
-	HSRSLA sla = null;
-	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
-	
-	HashMap<String, String> params = new HashMap<>();
-	HashMap<String, String> lowercaseHeaders = new HashMap<>();
+	protected ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
 		
+	protected ArrayList<Range> ranges = null;
+	protected ByteSize measuredSize = null;
+	
+	protected Charset bodyCharset = PFRHttp.defaultBodyCharset();
+	protected boolean throwOnFail = PFRHttp.defaultThrowOnFail();
+	
+	protected long responseTimeoutMillis = PFRHttp.defaultResponseTimeout();
+	
+	private static ThreadLocal<CloseableHttpClient> httpClient = new ThreadLocal<>();
+	
 	/***************************************************************************
-	 * 
+	 * @param url used for the request.
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder(String urlNoParams) {
-		this(null, urlNoParams);
-	}
-	/***************************************************************************
-	 * 
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder(String metricName, String urlNoParams) {
-		this.metricName = metricName;
-		this.URL = urlNoParams;
-		
-		if(PFRHttp.defaultHeaders() != null) {
-			for(Entry<String, String> entry : PFRHttp.defaultHeaders().entrySet()) {
-				header(entry.getKey(), entry.getValue());
-			}
-		};
+	public PFRHttpRequestBuilder(String url) {
+		this.URL = url;
 	}
 	
 	/***************************************************************************
-	 * Set request method to GET
+	 * @param url used for the request.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder(String metric, String url) {
+		this.metricName = metric;
+		this.URL = url;
+	}
+	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder metricName(String metric) {
+		this.metricName = metric;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder URL(String url) {
+		this.URL = url;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder GET() {
-		method = "GET";
+		this.method = "GET";
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set request method to POST
+	 * 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder POST() {
-		method = "POST";
+		this.method = "POST";
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set request method to PUT
+	 * 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder PUT() {
-		method = "PUT";
+		this.method = "PUT";
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set request method to DELETE
+	 * 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder DELETE() {
-		method = "DELETE";
+		this.method = "DELETE";
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set request method to a customized method.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder METHOD(String method) {
-		this.method = method;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Add a parameter to the request.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder param(String name, String value) {
-		params.put(name, value);
-		return this;
-	}
-	
-	
-	/***************************************************************************
-	 * Adds a map of parameters
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder params(Map<String, String> paramsMap) {
-		
-		if(paramsMap == null) { return this; }
-		
-		this.params.putAll(paramsMap);
-		return this;
-		
-	}
-	
-	/***************************************************************************
-	 * Add a header
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder header(String name, String value) {
-		lowercaseHeaders.put(name.trim().toLowerCase(), value);
-		return this;
-	}
-	
-	
-	/***************************************************************************
-	 * Adds a map of headers
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder headers(Map<String, String> headerMap) {
-		
-		if(headerMap == null) { return this; }
-		
-		for(Entry<String, String> entry : headerMap.entrySet()) {
-			header(entry.getKey(), entry.getValue());
-		}
-		return this;
-		
-	}
-	
-	/***************************************************************************
-	 * Toggles the checks to allow HTTP statuses >= 400 without failing 
-	 * automatically.
-	 * @return instance for chaining
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder allowHTTPErrors() {
-		this.autoFailOnHTTPErrors = false;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Disables the automatic following of HTTP Redirects.
-	 * Might be useful in certain cases.
-	 * @return instance for chaining.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder disableFollowRedirects() {
-		this.disableFollowRedirects = true;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Toggles the measurement of values with ranges.
-	 * Will put the measured values into buckets for easier analysis. 
 	 * 
-	 * @param value the current values used to determine the range
-	 * @param initial the initial range
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder measureRange(int value, int initial) {
-		
-		return measureRange(null, value, initial);
-		
-	}
-	/***************************************************************************
-	 * Toggles the measurement of values with ranges.
-	 * Will put the measured values into buckets for easier analysis. 
-	 * 
-	 * @param suffix the suffix that should be added to the metric name
-	 * @param value the current value used to determine the range
-	 * @param initial the initial range
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder measureRange(String suffix, int value, int initial) {
-		
-		if(ranges == null) {
-			ranges = new ArrayList<>();
-		}
-		
-		ranges.add( new Range(suffix, value, initial) );
-		
-		return this;
-		
-	}
-	
-	/***************************************************************************
-	 * Toggles the measurement of response size after unzipping.
-	 * This will measure the actual size of the received content in UTF8 encoding. 
-	 * 
-	 * @param size that should be reported
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder measureSize(ByteSize size) {
-		this.measuredSize = size;
+	public PFRHttpRequestBuilder OPTIONS() {
+		this.method = "OPTIONS";
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set an SLA for this request. You can only set one SLA per request.
+	 * 
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder sla(HSRSLA sla) {
+	public PFRHttpRequestBuilder HEAD() {
+		this.method = "HEAD";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder PATCH() {
+		this.method = "PATCH";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder TRACE() {
+		this.method = "TRACE";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set a SLA for the response. 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder sla(long sla) {
 		this.sla = sla;
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set an SLA for this request. You can only set one SLA per request.
+	 * If set to true, requests with HTTP status code => 400 will be considered
+	 * failing.
+	 * Default: false
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder sla(HSRMetric metric, Operator operator, int value) {
-		this.sla = new HSRSLA(metric, operator, value);
+	public PFRHttpRequestBuilder autoFailOnHTTPErrors(boolean fail) {
+		this.autoFailOnHTTPErrors = fail;
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set an SLA for this request. You can only set one SLA per request.
+	 * Is decompress responses automatically.
+	 * Default: true
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder sla(HSRMetric metric, Operator operator, Number value) {
-		this.sla = new HSRSLA(metric, operator, value);
+	public PFRHttpRequestBuilder autoDecompressResponse(boolean decompress) {
+		this.autoDecompressResponse = decompress;
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Set an SLA for this request. You can only set one SLA per request.
+	 * The pause that should be added before continuing with next request.
+	 * Value is in milliseconds. 
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder sla(HSRMetric metric, Operator operator, BigDecimal value) {
-		this.sla = new HSRSLA(metric, operator, value);
+	public PFRHttpRequestBuilder pause(long millis) {
+		this.pauseMillisLower = millis;
+		this.pauseMillisUpper = millis;
 		return this;
 	}
 	
+	/***************************************************************************
+	 * The pause that should be added before continuing with next request.
+	 * Random values between lower and upper milliseconds.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder pause(long lowerMillis, long upperMillis) {
+		this.pauseMillisLower = lowerMillis;
+		this.pauseMillisUpper = upperMillis;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * If set to true, requests that fail will throw a ResponseFailedException.
+	 * This value overrides the global setting PFRHttp.defaultThrowOnFail().
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder throwOnFail(boolean throwOnFail) {
+		this.throwOnFail = throwOnFail;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Sets the response timeout for the current request.
+	 * Values is in milliseconds. 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder responseTimeout(long millis) {
+		this.responseTimeoutMillis = millis;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Adds parameters to the request.
+	 * If method is POST the parameters will be added to the body, otherwise
+	 * the parameters will be added to the query of the URL.
+	 * @param parametersKeyValue params at odd positions are keys, params at even positions are values
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder params(String... parametersKeyValue) {
 		
-	/***************************************************************************
-	 * Set Basic Authentication
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder setAuthCredentialsBasic(String username, String password) {
-		return setAuthCredentials(PFRHttpAuthMethod.BASIC, username, password);
-	}
-	
-	/***************************************************************************
-	 * Set authentication credentials
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder setAuthCredentials(PFRHttpAuthMethod authMethod, String username, String password) {
-	
-		this.authMethod = (authMethod != null ) ? authMethod : PFRHttpAuthMethod.BASIC;
-		this.username = username;
-		this.pwdArray = (password != null ) ? password.toCharArray() : "".toCharArray();
-
+		if(params == null) { params = new HashMap<>(); }
+		
+		for(int i = 0; i < parametersKeyValue.length; i += 2) {
+			params.put(parametersKeyValue[i], parametersKeyValue[i+1]);
+		}
+		
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Add a request Body
+	 * Adds parameters to the request.
+	 * If method is POST the parameters will be added to the body, otherwise
+	 * the parameters will be added to the query of the URL.
+	 * @param map of values
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder body(String content) {
-		this.body = content;
+	public PFRHttpRequestBuilder params(HashMap<String, String> map) {
+		
+		if(map == null) { return this; }
+		
+		if(params == null) { params = new HashMap<>(); }
+		params.putAll(map);
+		
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Define a charset for the body. (Default: UTF-8) <br>
-	 * This charset will be ignored if the charset is defined
-	 * in the content-type header.
+	 * Adds headers to the request.
+	 * @param headersKeyValue params at odd positions are keys, params at even positions are values
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder headers(String... headersKeyValue) {
+		
+		if(lowercaseHeaders == null) { lowercaseHeaders = new HashMap<>(); }
+		
+		for(int i = 0; i < headersKeyValue.length; i += 2) {
+			lowercaseHeaders.put(headersKeyValue[i].toLowerCase(), headersKeyValue[i+1]);
+		}
+		
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Adds headers to the request.
+	 * @param map of values
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder headers(HashMap<String, String> map) {
+		
+		if(map == null) { return this; }
+		if(lowercaseHeaders == null) { lowercaseHeaders = new HashMap<>(); }
+		
+		for(Entry<String, String> entry : map.entrySet()) {
+			lowercaseHeaders.put(entry.getKey().toLowerCase(), entry.getValue());
+		}
+		
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set the body of the request.
+	 * @param body
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder body(String body) {
+		this.body = body;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set the charset for the body.
+	 * Default: PFRHttp.defaultBodyCharset() 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder bodyCharset(Charset charset) {
 		this.bodyCharset = charset;
@@ -337,565 +320,84 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
-	 * Add a request Body
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder body(String contentType, String content) {
-		this.header(HEADER_CONTENT_TYPE, contentType);
-		this.body = content;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Add a request Body in JSON format UTF-8 encoding
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder bodyJSON(String content) {
-		return this.body("application/json; charset=UTF-8", content);
-	}
-	
-	/***************************************************************************
-	 * Add a response timeout.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder timeout(long responseTimeoutMillis) {
-		this.responseTimeoutMillis = responseTimeoutMillis;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Add a pause after the response was received.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder pause(Duration duration) {
-		
-		long millis = duration.toMillis();
-		
-		this.pauseMillisLower = millis;
-		this.pauseMillisUpper = millis;
-		
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Overrides the default set with PFRHttp.defaultThrowOnFail().
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder throwOnFail(boolean enable) {
-		this.throwOnFail = enable;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Add a pause after the response was received.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder pause(long pauseMillis) {
-		this.pauseMillisLower = pauseMillis;
-		this.pauseMillisUpper = pauseMillis;
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Add a random pause in milliseconds that lies in between the specified
-	 * range.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder pause(long lowerMillis, long upperMillis) {
-		
-		if(lowerMillis <= upperMillis) {
-			this.pauseMillisLower = lowerMillis;
-			this.pauseMillisUpper = upperMillis;
-		}else {
-			this.pauseMillisLower = upperMillis;
-			this.pauseMillisUpper = lowerMillis;
-		}
-		return this;
-	}
-	
-	/***************************************************************************
-	 * Add a random pause in milliseconds that lies in between the specified
-	 * range.
-	 ***************************************************************************/
-	public PFRHttpRequestBuilder pause(Duration lowerDuration, Duration upperDuration) {
-		return pause(lowerDuration.toMillis(), upperDuration.toMillis());
-	}
-	
-	
-	/***************************************************************************
-	 * Builds the url with parameters for this request builder and returns
-	 * it as a string.
-	 * Useful for debugging.
-	 ***************************************************************************/
-	public String buildURLwithParams() {
-		return  PFRHttp.buildURL(URL, params);
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks.
-	 * @param check the check to be added
-	 * @return instance of chaining
+	 * Adds a check which will verify the response.
+	 * Checks can be found in PFRHttpCheck class.
+	 * @param check instance of check
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder check(PFRHttpCheck check) {
-		checksList.add(check);
+		this.checksList.add(check);
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param type the check type that should be used for this check
-	 * @param containsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
+	 * Adds a range to the request. The range value will be put into buckets
+	 * based on the initial value.
+	 * @param rangeValue value to put into bucket
+	 * @param rangeInitial initial value
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder checkBody(CheckType type, String containsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(type)
-						.checkBody(containsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
+	public PFRHttpRequestBuilder measureRange(int rangeValue, int rangeInitial) {
+		return measureRange(null, rangeValue, rangeInitial);
 	}
 	
 	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param containsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyContains(String containsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.CONTAINS)
-						.checkBody(containsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param containsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyContains(String containsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.CONTAINS)
-						.checkBody(containsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param containsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyContains(String containsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.CONTAINS)
-				.checkBody(containsThis) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param notContainsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyContainsNot(String notContainsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.DOES_NOT_CONTAIN)
-						.checkBody(notContainsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param notContainsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyContainsNot(String notContainsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.DOES_NOT_CONTAIN)
-						.checkBody(notContainsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param notContainsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyContainsNot(String notContainsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.DOES_NOT_CONTAIN)
-				.checkBody(notContainsThis) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyEquals(String equalsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.EQUALS)
-						.checkBody(equalsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyEquals(String equalsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.EQUALS)
-						.checkBody(equalsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyEquals(String equalsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.EQUALS)
-				.checkBody(equalsThis) 
-			); 	
-		return this; 
-	}
-	
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param regexToMatch the regex to be matched
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyRegex(String regexToMatch, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.MATCH_REGEX)
-						.checkBody(regexToMatch)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param regexToMatch the regex to be matched
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyRegex(String regexToMatch, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.MATCH_REGEX)
-						.checkBody(regexToMatch)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param regexToMatch the regex to be matched
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkBodyRegex(String regexToMatch) { 
-		this.check(
-			new PFRHttpCheck(CheckType.MATCH_REGEX)
-				.checkBody(regexToMatch) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param type the check type that should be used for this check
-	 * @param containsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeader(CheckType type, String headerName, String containsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(type)
-						.checkHeader(headerName, containsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param containsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderContains(String headerName, String containsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.CONTAINS)
-						.checkHeader(headerName, containsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param containsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderContains(String headerName, String containsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.CONTAINS)
-						.checkHeader(headerName, containsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param containsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderContains(String headerName, String containsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.CONTAINS)
-				.checkHeader(headerName, containsThis) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param notContainsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderContainsNot(String headerName, String notContainsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.DOES_NOT_CONTAIN)
-						.checkHeader(headerName, notContainsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param notContainsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderContainsNot(String headerName, String notContainsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.DOES_NOT_CONTAIN)
-						.checkHeader(headerName, notContainsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param notContainsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderContainsNot(String headerName, String notContainsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.DOES_NOT_CONTAIN)
-				.checkHeader(headerName, notContainsThis) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderEquals(String headerName, String equalsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.EQUALS)
-						.checkHeader(headerName, equalsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderEquals(String headerName, String equalsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.EQUALS)
-						.checkHeader(headerName, equalsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderEquals(String headerName, String equalsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.EQUALS)
-				.checkHeader(headerName, equalsThis) 
-			); 	
-		return this; 
-	}
-	
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param regexToMatch the regex to be matched
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderRegex(String headerName, String regexToMatch, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.MATCH_REGEX)
-						.checkHeader(headerName, regexToMatch)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param regexToMatch the regex to be matched
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderRegex(String headerName, String regexToMatch, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.MATCH_REGEX)
-						.checkHeader(headerName, regexToMatch)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param regexToMatch the regex to be matched
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkHeaderRegex(String headerName, String regexToMatch) { 
-		this.check(
-			new PFRHttpCheck(CheckType.MATCH_REGEX)
-				.checkHeader(headerName, regexToMatch) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 * @param customMessage a custom message instead of the default message
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkStatusEquals(int equalsThis, boolean appendLogDetails, String customMessage) { 
-			this.check(
-					new PFRHttpCheck(CheckType.EQUALS)
-						.checkStatus(equalsThis)
-						.appendLogDetails(appendLogDetails) 
-						.messageOnFail(customMessage)
-				); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 * @param appendLogDetails retrieved from PFRContext 
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkStatusEquals(int equalsThis, boolean appendLogDetails) { 
-			this.check(
-					new PFRHttpCheck(CheckType.EQUALS)
-						.checkStatus(equalsThis)
-						.appendLogDetails(appendLogDetails) 
-					); 	
-			return this; 
-	}
-	
-	/***************************************************************************
-	 * Add a check to the list of checks. 
-	 * @param equalsThis the string to be checked
-	 ***************************************************************************/ 
-	public PFRHttpRequestBuilder checkStatusEquals(int equalsThis) { 
-		this.check(
-			new PFRHttpCheck(CheckType.EQUALS)
-				.checkStatus(equalsThis) 
-			); 	
-		return this; 
-	}
-	
-	/***************************************************************************
-	 * Returns true if the header should be included in the generated request.
-	 * Returns false otherwise.
-	 * This check is needed to prevent exceptions thrown by Apache HTTP Client.
-	 * @param headerName the name of the header
-	 ***************************************************************************/ 
-	public static boolean isIncludedHeader(String headerName) { 
-		return (! headerName.startsWith(":") 
-			 && ! headerName.equalsIgnoreCase("content-length")
-			 && ! headerName.equalsIgnoreCase("transfer-encoding") 
-		);
-	}
-	
-	/***************************************************************************
-	 * Build and send the request. Returns a 
-	 * PRFHttpResponse or null in case of errors.
+	 * Adds a range to the request. The range value will be put into buckets
+	 * based on the initial value.
+	 * @param suffix to add to the metric name
+	 * @param rangeValue value to put into bucket
+	 * @param rangeInitial initial value
 	 ***************************************************************************/
-	private static CloseableHttpClient getClient() throws Exception {
+	public PFRHttpRequestBuilder measureRange(String suffix, int rangeValue, int rangeInitial) {
+		if(ranges == null) { ranges = new ArrayList<>(); }
+		ranges.add(new Range(suffix, rangeValue, rangeInitial));
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Enable measuring the body size of the response.
+	 * By default size is not measured. 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder measureSize() {
+		this.measuredSize = ByteSize.B;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Enable measuring the body size of the response in specific unit.
+	 * By default size is not measured. 
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder measureSize(ByteSize byteSize) {
+		this.measuredSize = byteSize;
+		return this;
+	}
+	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	protected record Range(String suffix, int rangeValue, int rangeInitial) {}
+	
+	/***************************************************************************
+	 * Returns the HttpClient used for requests.
+	 ***************************************************************************/
+	private CloseableHttpClient getClient() {
 		
-		synchronized (SYNC_LOCK_CLIENT) {
+		if(httpClient.get() == null) {
 			
-			if(httpClientSingle == null) {
-			//if(httpClient.get() == null) {
-				HttpClientBuilder clientBuilder = 
-						HttpClientBuilder.create()
-								.setConnectionManagerShared(true)
-								.setUserAgent(PFRHttp.defaultUserAgent())
-								.setConnectionManager(PFRHttp.getConnectionManager())
-								.setKeepAliveStrategy( (response, context) -> { return TimeValue.ofSeconds(60); }) // avoid ephemeral port exhaustion
-								.setConnectionReuseStrategy(DefaultConnectionReuseStrategy.INSTANCE)
-								//.evictExpiredConnections()
-								//.evictIdleConnections(TimeValue.ofSeconds(30))
-								;
+			HttpClientBuilder builder = HttpClients.custom();
+			builder.setConnectionManager(PFRHttp.getConnectionManager());
+			//---------------------------
+			// Proxy Handling
+			PFRHttp.httpClientAddProxy(builder);
 			
-				PFRHttp.httpClientAddProxy(clientBuilder);
-				
-				httpClientSingle = clientBuilder.build();
-				// httpClient.set( clientBuilder.build());
-			}
+			//---------------------------
+			// Cookie Handling
+			builder.setDefaultCookieStore(PFRHttp.cookieStore.get());
 			
+			//---------------------------
+			// Build Client
+			httpClient.set( builder.build() );
 		}
-        
-		return httpClientSingle;
-		//return httpClient.get();
+		
+		return httpClient.get();
 	}
 	
 	/***************************************************************************
@@ -916,49 +418,31 @@ public class PFRHttpRequestBuilder {
 			return CompletableFuture.supplyAsync(this::send);
 		}
 	}
-	
+
 	/***************************************************************************
 	 * Build and send the request. Returns a 
 	 * PRFHttpResponse or null in case of errors.
 	 ***************************************************************************/
-	@SuppressWarnings("deprecation")
 	public PFRHttpResponse send() {
 		
 		try {
 			
-			//---------------------------------
-			// Create URL
-			String urlWithParams = buildURLwithParams();
-
-			//---------------------------------
-			// Create Request Base
-			HttpUriRequestBase requestBase = new HttpUriRequestBase(method, URI.create(urlWithParams));
-			
-			requestBase.setConfig(
-						 RequestConfig
-								.custom()
-								.setResponseTimeout(Timeout.ofMilliseconds(responseTimeoutMillis) )
-								.setRedirectsEnabled( ! disableFollowRedirects )
-								.build()
-					);
-			
-			//-----------------------------------
-			// Handle POST Body			
-			if (body != null) {
-
-			    ContentType type;
-
-			    if (!lowercaseHeaders.containsKey(HEADER_CONTENT_TYPE)) {
-			        type = ContentType.create("text/plain", bodyCharset);
-			    } else {
-			        type = ContentType.parse(lowercaseHeaders.get(HEADER_CONTENT_TYPE));
-
-			        if (type.getCharset() == null) {
-			            type = type.withCharset(bodyCharset);
-			        }
-			    }
-
-			    requestBase.setEntity( new StringEntity(body, type) );
+			//----------------------------------
+			// Build Request Method 
+			HttpUriRequestBase requestBase = null;
+			switch(method.toUpperCase()) {
+				case "GET":		requestBase = new HttpGet(buildURLwithParams());		break;
+				case "POST":	requestBase = new HttpPost(URL);						break;
+				case "PUT":		requestBase = new HttpPut(URL);							break;
+				case "DELETE":	requestBase = new HttpDelete(buildURLwithParams());		break;
+				case "OPTIONS":	requestBase = new HttpOptions(buildURLwithParams());	break;
+				case "HEAD":	requestBase = new HttpHead(buildURLwithParams());		break;
+				case "PATCH":	requestBase = new HttpPatch(URL);						break;
+				case "TRACE":	requestBase = new HttpTrace(buildURLwithParams());		break;
+				
+				default:
+					PFRHttp.logger.error("HTTP Method is not supported: "+method);
+					return null;
 			}
 			
 	        //----------------------------------
@@ -967,109 +451,65 @@ public class PFRHttpRequestBuilder {
 			
 		    //----------------------------------
 			// Set Auth mechanism
-			if(username != null) {
-				
-				//---------------------------------
-				// Credential Provider
-				String scheme = requestBase.getUri().getScheme();
-				String hostname = requestBase.getUri().getHost();
-				int port = requestBase.getUri().getPort();
-				HttpHost targetHost = new HttpHost(scheme, hostname, port);
-
-				CredentialsProviderBuilder credProviderBuilder = CredentialsProviderBuilder.create();
-				
-				RegistryBuilder<AuthSchemeFactory> registryBuilder = RegistryBuilder.<AuthSchemeFactory>create();
-				
-				switch(this.authMethod) {
-				
-					//------------------------------
-					// Basic 
-					case BASIC:
-						//PRFHttp.addBasicAuthorizationHeader(headers, username, new String(pwdArray));
-						AuthScope authScopeBasic = new AuthScope(targetHost, null, new BasicScheme().getName());
-						credProviderBuilder.add(authScopeBasic, username, pwdArray);
-						registryBuilder.register(StandardAuthScheme.BASIC, BasicSchemeFactory.INSTANCE);
-					break;
-					
-					//------------------------------
-					// Basic 
-					case BASIC_HEADER:
-						PFRHttp.addBasicAuthorizationHeader(lowercaseHeaders, username, new String(pwdArray));
-					break;
-					
-					
-					//------------------------------
-					// Digest
-					case DIGEST:
-						AuthScope authScopeDigest = new AuthScope(targetHost, null, new DigestScheme().getName());
-						credProviderBuilder.add(authScopeDigest, username, pwdArray);
-						registryBuilder.register(StandardAuthScheme.DIGEST, DigestSchemeFactory.INSTANCE);
-					break;
-					
-					//------------------------------
-					// NTLM
-					case NTLM:
-						String ntlmUsername = username;
-						String ntlmDomain = null;
-						if(username.contains("@")) {
-							String[] splitted = username.split("@");
-							ntlmUsername = splitted[0];
-							ntlmDomain = splitted[1];
-						}
-						AuthScope authScopeNTLM = new AuthScope(targetHost, null, new NTLMScheme().getName());
-						
-						NTCredentials ntlmCreds = new NTCredentials(pwdArray, ntlmUsername, ntlmDomain, null);
-						credProviderBuilder.add(authScopeNTLM, ntlmCreds);
-						registryBuilder.register(StandardAuthScheme.NTLM, NTLMSchemeFactory.INSTANCE);
-					break;
-						
-					//------------------------------
-					// KERBEROS (experimental)
-					case KERBEROS:
-						GSSManager manager = GSSManager.getInstance();
-						GSSName name = manager.createName(username, GSSName.NT_USER_NAME);
-					    GSSCredential gssCred = manager.createCredential(name,GSSCredential.DEFAULT_LIFETIME, (Oid) null, GSSCredential.INITIATE_AND_ACCEPT);
-					    
-						AuthScope authScopeKerberos = new AuthScope(targetHost, null, new KerberosScheme().getName());
-					
-						KerberosCredentials kerbCred = new KerberosCredentials(gssCred);
-						credProviderBuilder.add(authScopeKerberos, kerbCred);
-						registryBuilder.register(StandardAuthScheme.SPNEGO, new SPNegoSchemeFactory(
-											                KerberosConfig.custom()
-									                        .setStripPort(KerberosConfig.Option.DEFAULT)
-									                        .setUseCanonicalHostname(KerberosConfig.Option.DEFAULT)
-									                        .build(),
-									                SystemDefaultDnsResolver.INSTANCE))
-									        .register(StandardAuthScheme.KERBEROS, KerberosSchemeFactory.DEFAULT);
-					break;
-					
-					default:
-					break;
-				
-				}
-				
-				//---------------------------------
-				// Credential Provider
-				if (this.authMethod != PFRHttpAuthMethod.BASIC_HEADER) {
-					context.setCredentialsProvider(credProviderBuilder.build());
-	                context.setAuthSchemeRegistry(registryBuilder.build());
-				}
-				
+			if(lowercaseHeaders != null && lowercaseHeaders.containsKey("prf-auth-method")) {
+				setAuthMechanism(context);
 			}
 			
-			//-----------------------------------
-			// Handle headers
-			if(lowercaseHeaders != null ) {
-				for(Entry<String, String> header : lowercaseHeaders.entrySet()) {
-					// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
-					String name = header.getKey();
-					
-					if( isIncludedHeader(name) ){
-						requestBase.addHeader(header.getKey(), header.getValue());
-					}
-				}
+			//----------------------------------
+			// Set Request Config
+			RequestConfig.Builder requestConfigBuilder = RequestConfig.custom()
+	            .setResponseTimeout( Timeout.ofMilliseconds(responseTimeoutMillis) )
+	            ;
+			
+			if(!autoDecompressResponse) {
+				requestConfigBuilder.setContentCompressionEnabled(false);
 			}
 
+			requestBase.setConfig(requestConfigBuilder.build());
+			
+			//----------------------------------
+			// Add Default Headers
+			HashMap<String, String> defaults = PFRHttp.defaultHeaders();
+			if(defaults != null) {
+				for(Entry<String, String> entry : defaults.entrySet()) {
+					requestBase.addHeader(entry.getKey(), entry.getValue());
+				}
+			}
+			
+			//----------------------------------
+			// Add User Agent
+			if(PFRHttp.defaultUserAgent() != null 
+			&& (lowercaseHeaders == null || !lowercaseHeaders.containsKey("user-agent")) 
+			) {
+				requestBase.addHeader("User-Agent", PFRHttp.defaultUserAgent());
+			}
+			
+			//----------------------------------
+			// Add Headers
+			if(lowercaseHeaders != null) {
+				for(Entry<String, String> entry : lowercaseHeaders.entrySet()) {
+					requestBase.addHeader(entry.getKey(), entry.getValue());
+				}
+			}
+			
+			//----------------------------------
+			// Body 
+			if(body != null) {
+				
+				ContentType contentType = null;
+				Header contentTypeHeader = requestBase.getFirstHeader("Content-Type");
+				if(contentTypeHeader != null) {
+					contentType = ContentType.parse(contentTypeHeader.getValue());
+				}
+				
+				requestBase.setEntity(new StringEntity(body, contentType));
+				
+			}else if(method.equalsIgnoreCase("POST") && params != null && !params.isEmpty()) {
+				//----------------------------------
+				// POST Params
+				requestBase.setEntity(new StringEntity(PFRHttp.buildQueryString(params), ContentType.APPLICATION_FORM_URLENCODED));
+			}
+			
 			//-----------------------------------
 			// Connect and create response
 
@@ -1087,21 +527,65 @@ public class PFRHttpRequestBuilder {
 			
 		
 		} catch (Throwable e) { 
-			
-			// do not handle ResponseFailedException
-			if(e instanceof ResponseFailedException) {
-				throw (ResponseFailedException)e;
-			}
-			
-			PFRHttp.logger.error("Exception while sending HTTP Request: "+e.getMessage(), e);
-		} 
+			PFRHttp.logger.error("Exception occured while building and sending request: "+e.getMessage(), e);
+		}
 		
-		return  new PFRHttpResponse(this);
-		
+		return new PFRHttpResponse(this);
 	}
 	
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	private void setAuthMechanism(HttpClientContext context) {
+		
+		PFRHttpAuthMethod authMethod = PFRHttpAuthMethod.valueOf(lowercaseHeaders.remove("prf-auth-method").toUpperCase());
+		String username = lowercaseHeaders.remove("prf-auth-user");
+		String password = lowercaseHeaders.remove("prf-auth-password");
+		
+		switch (authMethod) {
+			case BASIC_HEADER:
+				PFRHttp.addBasicAuthorizationHeader(lowercaseHeaders, username, password);
+				break;
+				
+			case BASIC:
+			case DIGEST:
+			case NTLM:
+			case KERBEROS:
+				CredentialsProvider credsProvider = new BasicCredentialsProvider();
+				credsProvider.setCredentials(new AuthScope(null, -1), new UsernamePasswordCredentials(username, password.toCharArray()));
+				context.setCredentialsProvider(credsProvider);
+				break;
 
+			default:
+				break;
+		}
+	}
 
+	/***************************************************************************
+	 * 
+	 ***************************************************************************/
+	protected String buildURLwithParams() {
+		
+		if(method.equalsIgnoreCase("POST") || params == null || params.isEmpty()) {
+			return URL;
+		}
+		
+		return PFRHttp.buildURL(URL, params);
+	}
 	
+	/***************************************************************************
+	 * Returns the metric name.
+	 ***************************************************************************/
+	public String getMetricName() {
+		return (metricName != null) ? metricName : URL;
+	}
+	
+	/***************************************************************************
+	 * Get the logic for extracting body. 
+	 * @return extracting as String or null
+	 ***************************************************************************/
+	public String body() {
+		return body;
+	}
 	
 }
