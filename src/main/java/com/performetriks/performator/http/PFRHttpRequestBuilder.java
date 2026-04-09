@@ -9,6 +9,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.Executors;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 
 import org.apache.hc.client5.http.SystemDefaultDnsResolver;
 import org.apache.hc.client5.http.auth.AuthSchemeFactory;
@@ -17,6 +20,14 @@ import org.apache.hc.client5.http.auth.KerberosConfig;
 import org.apache.hc.client5.http.auth.KerberosCredentials;
 import org.apache.hc.client5.http.auth.NTCredentials;
 import org.apache.hc.client5.http.auth.StandardAuthScheme;
+import org.apache.hc.client5.http.classic.methods.HttpDelete;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.classic.methods.HttpHead;
+import org.apache.hc.client5.http.classic.methods.HttpOptions;
+import org.apache.hc.client5.http.classic.methods.HttpPatch;
+import org.apache.hc.client5.http.classic.methods.HttpPost;
+import org.apache.hc.client5.http.classic.methods.HttpPut;
+import org.apache.hc.client5.http.classic.methods.HttpTrace;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.auth.BasicScheme;
@@ -31,8 +42,10 @@ import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.http.ContentType;
+import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpHost;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.impl.DefaultConnectionReuseStrategy;
@@ -146,6 +159,38 @@ public class PFRHttpRequestBuilder {
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder DELETE() {
 		method = "DELETE";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to OPTIONS
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder OPTIONS() {
+		method = "OPTIONS";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to HEAD
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder HEAD() {
+		method = "HEAD";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to PATCH
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder PATCH() {
+		method = "PATCH";
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Set request method to TRACE
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder TRACE() {
+		method = "TRACE";
 		return this;
 	}
 	
@@ -864,6 +909,25 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
+	 * Build and send the request asynchronously. Returns a 
+	 * CompletableFuture<PRFHttpResponse>.
+	 ***************************************************************************/
+	public CompletableFuture<PFRHttpResponse> sendAsync() {
+		if (PFRHttp.defaultUseVirtualThreads()) {
+			try {
+				java.lang.reflect.Method m = Executors.class.getMethod("newVirtualThreadPerTaskExecutor");
+				ExecutorService virtualExec = (ExecutorService) m.invoke(null);
+				return CompletableFuture.supplyAsync(this::send, virtualExec);
+			} catch (Exception e) {
+				PFRHttp.logger.warn("Virtual Threads are not supported on this JVM. Falling back to standard ForkJoinPool.", e);
+				return CompletableFuture.supplyAsync(this::send);
+			}
+		} else {
+			return CompletableFuture.supplyAsync(this::send);
+		}
+	}
+	
+	/***************************************************************************
 	 * Build and send the request. Returns a 
 	 * PRFHttpResponse or null in case of errors.
 	 ***************************************************************************/
@@ -914,11 +978,11 @@ public class PFRHttpRequestBuilder {
 			HttpUriRequestBase requestBase = new HttpUriRequestBase(method, URI.create(urlWithParams));
 			
 			requestBase.setConfig(
-						 RequestConfig
-								.custom()
-								.setResponseTimeout(Timeout.ofMilliseconds(responseTimeoutMillis) )
-								.setRedirectsEnabled( ! disableFollowRedirects )
-								.build()
+					 RequestConfig
+							.custom()
+							.setResponseTimeout(Timeout.ofMilliseconds(responseTimeoutMillis) )
+							.setRedirectsEnabled( ! disableFollowRedirects )
+							.build()
 					);
 			
 			//-----------------------------------
@@ -1020,12 +1084,12 @@ public class PFRHttpRequestBuilder {
 						KerberosCredentials kerbCred = new KerberosCredentials(gssCred);
 						credProviderBuilder.add(authScopeKerberos, kerbCred);
 						registryBuilder.register(StandardAuthScheme.SPNEGO, new SPNegoSchemeFactory(
-											                KerberosConfig.custom()
-									                        .setStripPort(KerberosConfig.Option.DEFAULT)
-									                        .setUseCanonicalHostname(KerberosConfig.Option.DEFAULT)
-									                        .build(),
-									                SystemDefaultDnsResolver.INSTANCE))
-									        .register(StandardAuthScheme.KERBEROS, KerberosSchemeFactory.DEFAULT);
+										                KerberosConfig.custom()
+								                        .setStripPort(KerberosConfig.Option.DEFAULT)
+								                        .setUseCanonicalHostname(KerberosConfig.Option.DEFAULT)
+								                        .build(),
+								                SystemDefaultDnsResolver.INSTANCE))
+								        .register(StandardAuthScheme.KERBEROS, KerberosSchemeFactory.DEFAULT);
 					break;
 					
 					default:
