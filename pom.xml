@@ -6,7 +6,7 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>com.performetriks</groupId>
 	<artifactId>performator-http</artifactId>
-	<version>2.0.0-SNAPSHOT</version>
+	<version>1.2.3</version>
 	
 	<name>Performator-HTTP</name>
 	<description>A library that contains HTTP library for the Performator framework.</description>

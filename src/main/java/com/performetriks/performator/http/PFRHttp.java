@@ -1104,6 +1104,7 @@ public class PFRHttp {
 				try{
 					connectionManager = new PoolingHttpClientConnectionManager(getSocketFactoryRegistry());
 				}catch(Exception e) {
+					logger.warn("Error initializing connection manager with SocketFactoryRegistry. Fallback to default factory(= no measurement of TLS, DNS or Connect metrics).", e);
 					connectionManager = new PoolingHttpClientConnectionManager();
 				}
 				
@@ -1214,6 +1215,7 @@ public class PFRHttp {
 	 * Set SSL Context
 	 * 
 	 **************************************************************************************/
+	@SuppressWarnings("deprecation")
 	private static Registry<ConnectionSocketFactory> getSocketFactoryRegistry() throws Exception {
 		
 		//=====================================================
