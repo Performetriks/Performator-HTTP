@@ -827,7 +827,12 @@ public class PFRHttp {
 								if(hostport.indexOf(":") != -1) {
 									host = hostport.substring(0, hostport.indexOf(":"));
 									String portStr = hostport.substring(hostport.indexOf(":")+1);
-									port = Integer.parseInt(portStr);
+									try {
+										port = Integer.parseInt(portStr);
+									} catch (NumberFormatException e) {
+										logger.error("Could not parse proxy port '{}', defaulting to 80.", portStr);
+										port = 80;
+									}
 								}else {
 									host = hostport;
 									port = 80;	
