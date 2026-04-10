@@ -23,6 +23,8 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.hc.client5.http.HttpRoute;
 import org.apache.hc.client5.http.config.ConnectionConfig;
@@ -42,6 +44,7 @@ import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.io.SocketConfig;
 import org.apache.hc.core5.http.protocol.HttpContext;
+import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.hc.core5.ssl.TrustStrategy;
@@ -56,6 +59,9 @@ import com.performetriks.performator.http.scriptengine.PFRScripting;
 import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
 import com.xresch.xrutils.utils.XRTimeUnit;
+
+import org.apache.hc.core5.pool.PoolConcurrencyPolicy;
+import org.apache.hc.core5.pool.PoolReusePolicy;
 
 /***************************************************************************
  * 
@@ -82,6 +88,21 @@ public class PFRHttp {
 
 	private static PFRHttp instance = new PFRHttp();
 	
+	// Connection pool configuration (global, set before first request)
+	private static final AtomicInteger maxTotalConnections = new AtomicInteger(1000);
+	private static final AtomicInteger maxPerRouteConnections = new AtomicInteger(200);
+
+	// TLS configuration (global)
+	private static final AtomicBoolean trustAllCertificates = new AtomicBoolean(true);
+
+	// Virtual thread support (global)
+	private static final AtomicBoolean useVirtualThreads = new AtomicBoolean(false);
+
+	// Sub-request measurement flags (global, off by default)
+	private static final AtomicBoolean measureDns = new AtomicBoolean(false);
+	private static final AtomicBoolean measureTls = new AtomicBoolean(false);
+	private static final AtomicBoolean measureConnect = new AtomicBoolean(false);
+
 	// either a http URL or a resourcePath like "com/mycompany/files/script.pac"
 	private static InheritableThreadLocal<String> proxyPacFile = new InheritableThreadLocal<>();
 	
@@ -90,7 +111,15 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> keystoreManagerPW = new InheritableThreadLocal<>();
 	
 	private static InheritableThreadLocal<String> defaultUserAgent = new InheritableThreadLocal<>();
-	
+
+
+	public static String currentMetricName() {
+		if(HSR.getActiveItem() != null) {
+			return HSR.getActiveItem().name();
+		}
+		return null;
+	}
+
 	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
 		@Override
 	    protected BasicCookieStore initialValue() {
@@ -98,6 +127,15 @@ public class PFRHttp {
 	    }
 	};
 	
+	static InheritableThreadLocal<HttpClientContext> httpContextStore = new InheritableThreadLocal<>() {
+		@Override
+		protected HttpClientContext initialValue() {
+			HttpClientContext context = HttpClientContext.create();
+			context.setCookieStore(cookieStore.get());
+			return context;
+		}
+	};
+
 	private static InheritableThreadLocal<HashMap<String, String>> defaultHeaders =  new InheritableThreadLocal<>();
 	
 	private static InheritableThreadLocal<Charset> defaultBodyCharset =  new InheritableThreadLocal<>() { 
@@ -131,6 +169,54 @@ public class PFRHttp {
 		}
 	};
 	
+	/**
+	 * Clears the current thread's HTTP session state (cookies and context).
+	 * This should be called by the scheduler at the end of a use case iteration
+	 * to prevent session leakage when threads are reused.
+	 */
+	public static void clearSession() {
+		cookieStore.remove();
+		httpContextStore.remove();
+		defaultHeaders.remove();
+	}
+
+	/**
+	 * Clears ALL thread-local configuration for the current thread, including
+	 * timeouts, charsets, and proxy settings, returning the thread to a clean
+	 * state.
+	 */
+	public static void resetThreadState() {
+		clearSession();
+		proxyPacFile.remove();
+		keystorePath.remove();
+		keystorePW.remove();
+		keystoreManagerPW.remove();
+		defaultUserAgent.remove();
+		defaultBodyCharset.remove();
+		defaultResponseTimeoutMillis.remove();
+		defaultConnectTimeoutMillis.remove();
+		defaultSocketTimeoutMillis.remove();
+		debugLogAll.remove();
+		debugLogFail.remove();
+		throwOnFail.remove();
+		defaultPauseMillisLower.remove();
+		defaultPauseMillisUpper.remove();
+	}
+
+	/**
+	 * Returns the current thread's HTTP context.
+	 */
+	public static HttpClientContext getContext() {
+		return httpContextStore.get();
+	}
+
+	/**
+	 * Manually sets the current thread's HTTP context.
+	 */
+	public static void setContext(HttpClientContext context) {
+		httpContextStore.set(context);
+	}
+
 	private static InheritableThreadLocal<Long> defaultPauseMillisLower = new InheritableThreadLocal<>() { 
 		@Override
 	    protected Long initialValue() {
@@ -363,7 +449,126 @@ public class PFRHttp {
 		return defaultUserAgent.get();
 	}
 
-	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
+	 * Set the maximum total number of connections in the pool.
+	 * Default: 1000
+	 ******************************************************************************************************/
+	public static void defaultMaxTotalConnections(int max) {
+		PFRHttp.maxTotalConnections.set(max);
+	}
+
+	/******************************************************************************************************
+	 * Returns the current max total connections setting.
+	 ******************************************************************************************************/
+	public static int defaultMaxTotalConnections() {
+		return PFRHttp.maxTotalConnections.get();
+	}
+
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
+	 * Set the maximum connections per route (per host).
+	 * Default: 200
+	 ******************************************************************************************************/
+	public static void defaultMaxPerRouteConnections(int max) {
+		PFRHttp.maxPerRouteConnections.set(max);
+	}
+
+	/******************************************************************************************************
+	 * Returns the current max per-route connections setting.
+	 ******************************************************************************************************/
+	public static int defaultMaxPerRouteConnections() {
+		return PFRHttp.maxPerRouteConnections.get();
+	}
+
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
+	 * If true, all SSL/TLS certificates will be trusted (insecure, for testing
+	 * only).
+	 * Default: false (uses JVM default trust store).
+	 ******************************************************************************************************/
+	public static void defaultTrustAllCertificates(boolean trustAll) {
+		PFRHttp.trustAllCertificates.set(trustAll);
+	}
+
+	/******************************************************************************************************
+	 * Returns the current trust-all-certificates setting.
+	 ******************************************************************************************************/
+	public static boolean defaultTrustAllCertificates() {
+		return PFRHttp.trustAllCertificates.get();
+	}
+
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * Enable virtual threads (JDK 21+) for HTTP request execution.
+	 * When enabled, blocking HTTP calls run on virtual threads, allowing
+	 * massive concurrency without OS thread overhead.
+	 * Default: false
+	 ******************************************************************************************************/
+	public static void defaultUseVirtualThreads(boolean enable) {
+		PFRHttp.useVirtualThreads.set(enable);
+	}
+
+	/******************************************************************************************************
+	 * Returns whether virtual threads are enabled.
+	 ******************************************************************************************************/
+	public static boolean defaultUseVirtualThreads() {
+		return PFRHttp.useVirtualThreads.get();
+	}
+
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
+	 * Enable DNS resolution time measurement as a separate HSR metric (suffix: -DNS).
+	 * Default: false
+	 ******************************************************************************************************/
+	public static void defaultMeasureDns(boolean enable) {
+		PFRHttp.measureDns.set(enable);
+	}
+
+	/******************************************************************************************************
+	 * Returns whether DNS measurement is enabled.
+	 ******************************************************************************************************/
+	public static boolean defaultMeasureDns() {
+		return PFRHttp.measureDns.get();
+	}
+
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
+	 * Enable TLS handshake time measurement as a separate HSR metric (suffix: -TLS).
+	 * Default: false
+	 ******************************************************************************************************/
+	public static void defaultMeasureTls(boolean enable) {
+		PFRHttp.measureTls.set(enable);
+	}
+
+	/******************************************************************************************************
+	 * Returns whether TLS measurement is enabled.
+	 ******************************************************************************************************/
+	public static boolean defaultMeasureTls() {
+		return PFRHttp.measureTls.get();
+	}
+
+	/******************************************************************************************************
+	 * <b>Scope:</b> Global <br>
+	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
+	 * Enable TCP connect time measurement as a separate HSR metric (suffix: -Connect).
+	 * Default: false
+	 ******************************************************************************************************/
+	public static void defaultMeasureConnect(boolean enable) {
+		PFRHttp.measureConnect.set(enable);
+	}
+
+	/******************************************************************************************************
+	 * Returns whether TCP connect measurement is enabled.
+	 ******************************************************************************************************/
+	public static boolean defaultMeasureConnect() {
+		return PFRHttp.measureConnect.get();
+	}
 
 	
 	/******************************************************************************************************
@@ -612,27 +817,28 @@ public class PFRHttp {
 							if(proxyDef.trim().isEmpty()) { continue; }
 							
 							String[] splitted = proxyDef.trim().split(" ");
-							PFRProxy cfwProxy = instance.new PFRProxy();
 							
-							String port;
+							String host;
+							int port;
 							
-							cfwProxy.type = splitted[0];
+							String type = splitted[0];
 							if(splitted.length > 1) {
 								String hostport = splitted[1];
 								if(hostport.indexOf(":") != -1) {
-									cfwProxy.host = hostport.substring(0, hostport.indexOf(":"));
-									port = hostport.substring(hostport.indexOf(":")+1);
+									host = hostport.substring(0, hostport.indexOf(":"));
+									String portStr = hostport.substring(hostport.indexOf(":")+1);
+									try {
+										port = Integer.parseInt(portStr);
+									} catch (NumberFormatException e) {
+										logger.error("Could not parse proxy port '{}', defaulting to 80.", portStr);
+										port = 80;
+									}
 								}else {
-									cfwProxy.host = hostport;
-									port = "80";	
+									host = hostport;
+									port = 80;	
 								}
 								
-								try {
-									cfwProxy.port = Integer.parseInt(port);
-								}catch(Throwable e) {
-									logger.error("Error parsing port to integer.", e);
-								}
-								proxies.add(cfwProxy);
+								proxies.add(new PFRProxy(type, host, port));
 							}
 						}							
 					}
@@ -649,8 +855,7 @@ public class PFRHttp {
 		
 		if (proxyArray == null || proxyArray.size() == 0){
 			proxyArray = new ArrayList<PFRProxy>(); 
-			PFRProxy direct = instance.new PFRProxy();
-			direct.type = "DIRECT";
+			PFRProxy direct = new PFRProxy("DIRECT", null, 80);
 			proxyArray.add(direct);
 		}
 		
@@ -674,11 +879,11 @@ public class PFRHttp {
 			// Iterate PAC Proxies until address is resolved
 			for(PFRProxy cfwProxy : proxiesArray) {
 
-				if(cfwProxy.type.trim().toUpperCase().equals("DIRECT")) {
+				if(cfwProxy.type().trim().toUpperCase().equals("DIRECT")) {
 					return null;
 				}else {
 					
-					InetSocketAddress address = new InetSocketAddress(cfwProxy.host, cfwProxy.port);
+					InetSocketAddress address = new InetSocketAddress(cfwProxy.host(), cfwProxy.port());
 					if(address.isUnresolved()) { 
 						continue;
 					}
@@ -716,11 +921,11 @@ public class PFRHttp {
 				// Iterate PAC Proxies until address is resolved
 				for(PFRProxy cfwProxy : proxiesArray) {
 
-					if(cfwProxy.type.trim().toUpperCase().equals("DIRECT")) {
+					if(cfwProxy.type().trim().toUpperCase().equals("DIRECT")) {
 						proxiedConnection = (HttpURLConnection)new URL(url).openConnection();
 					}else {
 						
-						InetSocketAddress address = new InetSocketAddress(cfwProxy.host, cfwProxy.port);
+						InetSocketAddress address = new InetSocketAddress(cfwProxy.host(), cfwProxy.port());
 						if(address.isUnresolved()) { 
 							continue;
 						};
@@ -808,7 +1013,7 @@ public class PFRHttp {
 				ArrayList<PFRProxy> proxiesArray = getProxies(url);
 
 				//----------------------------------
-				// No proxy → DIRECT
+				// No proxy &rarr; DIRECT
 				if (proxiesArray == null || proxiesArray.isEmpty()) {
 				    return new HttpRoute(finalTarget);
 				}
@@ -817,16 +1022,16 @@ public class PFRHttp {
 				// Iterate PAC Proxies until address is resolved
 				for(PFRProxy cfwProxy : proxiesArray) {
 					
-					if(cfwProxy.type.trim().toUpperCase().equals("DIRECT")) {
+					if(cfwProxy.type().trim().toUpperCase().equals("DIRECT")) {
 						return new HttpRoute(finalTarget); // no proxy required
 					}else {
 						
-						InetSocketAddress address = new InetSocketAddress(cfwProxy.host, cfwProxy.port);
+						InetSocketAddress address = new InetSocketAddress(cfwProxy.host(), cfwProxy.port());
 						if(address.isUnresolved()) { 
 							continue;
 						};
 
-						HttpHost proxy = new HttpHost(cfwProxy.host, cfwProxy.port);
+						HttpHost proxy = new HttpHost(cfwProxy.host(), cfwProxy.port());
 
 						return new HttpRoute(finalTarget, null, proxy, isSecure);
 					}
@@ -863,8 +1068,8 @@ public class PFRHttp {
 	
 	/******************************************************************************************************
 	 * Returns an immutable array of {@link Cookie cookies} that this HTTP
-     * state currently contains.
-     * 
+	 * state currently contains.
+	 * 
 	 * @return list of cookies, baked well without sugar
 	 ******************************************************************************************************/
 	public static List<Cookie> getCookies() {
@@ -902,8 +1107,8 @@ public class PFRHttp {
 					connectionManager = new PoolingHttpClientConnectionManager();
 				}
 				
-				connectionManager.setMaxTotal(1000);
-				connectionManager.setDefaultMaxPerRoute(200);
+				connectionManager.setMaxTotal(PFRHttp.maxTotalConnections.get());
+				connectionManager.setDefaultMaxPerRoute(PFRHttp.maxPerRouteConnections.get());
 
 				
 				connectionManager.setDefaultConnectionConfig(
@@ -940,51 +1145,6 @@ public class PFRHttp {
 		return new PFRHttpRequestBuilder(metric, url);	    	
 	}
 	
-//	/******************************************************************************************************
-//	 * Send a HTTP GET request and returns the result or null in case of error.
-//	 * @param url used for the request.
-//	 * @param params the parameters which should be added to the request or null
-//	 * @return PRFHttpResponse response or null
-//	 ******************************************************************************************************/
-//	public static PFRHttpResponse sendGETRequest(String url, HashMap<String, String> params) {
-//		return sendGETRequest(url, params, null);	    	
-//	}
-	
-//	/******************************************************************************************************
-//	 * Send a HTTP GET request and returns the result or null in case of error.
-//	 * @param url used for the request.
-//	 * @param params the parameters which should be added to the request or null
-//	 * @param headers the HTTP headers for the request or null
-//	 * @return PRFHttpResponse response or null
-//	 ******************************************************************************************************/
-//	public static PFRHttpResponse sendGETRequest(String url, HashMap<String, String> params, HashMap<String, String> headers) {
-//
-//		return PFRHttp.newRequestBuilder(url)
-//				.GET()
-//				.headers(headers)
-//				.params(params)
-//				.send();
-//
-//	    	
-//	}
-		
-
-//	/******************************************************************************************************
-//	 * Send a HTTP POST request and returns the result or null in case of error.
-//	 * @param url used for the request.
-//	 * @param params the parameters which should be added to the requests post body or null
-//	 * @param headers the HTTP headers for the request or null
-//	 * @return String response
-//	 ******************************************************************************************************/
-//	public static Response sendPOSTRequest(String url, HashMap<String, String> params, HashMap<String, String> headers) {
-//		
-//		return PFRHttp.create(url)
-//					.POST()
-//					.headers(headers)
-//					.params(params)
-//					.send();
-//	    	
-//	}
 
 	/**************************************************************************************
 	 * Loads the keystore, caches it and then returns the cached instance.
@@ -1060,32 +1220,38 @@ public class PFRHttp {
 		// Initialize Connection Manager
 		//=====================================================
 
-			//-------------------------------
+		// -------------------------------
+		// Create SSL Context Builder
+		final SSLContextBuilder sslContextBuilder;
+
+		if (trustAllCertificates.get()) {
 			// Trust anything
 			final TrustStrategy acceptingTrustStrategy = (cert, authType) -> true;
-		    
-			//-------------------------------
-			// Create SSL Context Builder
-			final SSLContextBuilder sslContextBuilder = SSLContexts.custom().loadTrustMaterial(null, acceptingTrustStrategy); 
-			addKeyStore(sslContextBuilder);
-			
-			//-------------------------------
-			// Connection Factory
-			final SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(sslContextBuilder.build(), NoopHostnameVerifier.INSTANCE);
-			
-			final Registry<ConnectionSocketFactory> socketFactoryRegistry = 
-		        RegistryBuilder.<ConnectionSocketFactory> create()
-		        .register("https", sslsf )
-		        .register("http", new PlainConnectionSocketFactory() )
-		        .build();
-			
-			return socketFactoryRegistry;
+			sslContextBuilder = SSLContexts.custom().loadTrustMaterial(null, acceptingTrustStrategy);
+		} else {
+			// Use JVM default trust store
+			sslContextBuilder = SSLContexts.custom();
+		}
+
+		addKeyStore(sslContextBuilder);
+
+		// -------------------------------
+		// Connection Factory
+		final SSLConnectionSocketFactory sslsf;
+		if (trustAllCertificates.get()) {
+			sslsf = new SSLConnectionSocketFactory(sslContextBuilder.build(), NoopHostnameVerifier.INSTANCE);
+		} else {
+			sslsf = new SSLConnectionSocketFactory(sslContextBuilder.build());
+		}
+
+		final Registry<ConnectionSocketFactory> socketFactoryRegistry = RegistryBuilder
+				.<ConnectionSocketFactory>create()
+				.register("https", new PFRSocketFactory.PFRLayeredSocketFactory(sslsf))
+				.register("http", new PFRSocketFactory(new PlainConnectionSocketFactory()))
+				.build();
+
+		return socketFactoryRegistry;
 	}
 	
-	protected class PFRProxy {
-		public String type;
-		public String host;
-		public int port = 80;
-		
-	}
+	protected record PFRProxy(String type, String host, int port) { }
 }
