@@ -89,8 +89,8 @@ public class PFRHttp {
 	private static PFRHttp instance = new PFRHttp();
 	
 	// Connection pool configuration (global, set before first request)
-	private static final AtomicInteger maxTotalConnections = new AtomicInteger(1000);
-	private static final AtomicInteger maxPerRouteConnections = new AtomicInteger(200);
+	private static final AtomicInteger maxTotalConnections = new AtomicInteger(3000);
+	private static final AtomicInteger maxPerRouteConnections = new AtomicInteger(1000);
 
 	// TLS configuration (global)
 	private static final AtomicBoolean trustAllCertificates = new AtomicBoolean(true);
@@ -169,54 +169,6 @@ public class PFRHttp {
 		}
 	};
 	
-	/**
-	 * Clears the current thread's HTTP session state (cookies and context).
-	 * This should be called by the scheduler at the end of a use case iteration
-	 * to prevent session leakage when threads are reused.
-	 */
-	public static void clearSession() {
-		cookieStore.remove();
-		httpContextStore.remove();
-		defaultHeaders.remove();
-	}
-
-	/**
-	 * Clears ALL thread-local configuration for the current thread, including
-	 * timeouts, charsets, and proxy settings, returning the thread to a clean
-	 * state.
-	 */
-	public static void resetThreadState() {
-		clearSession();
-		proxyPacFile.remove();
-		keystorePath.remove();
-		keystorePW.remove();
-		keystoreManagerPW.remove();
-		defaultUserAgent.remove();
-		defaultBodyCharset.remove();
-		defaultResponseTimeoutMillis.remove();
-		defaultConnectTimeoutMillis.remove();
-		defaultSocketTimeoutMillis.remove();
-		debugLogAll.remove();
-		debugLogFail.remove();
-		throwOnFail.remove();
-		defaultPauseMillisLower.remove();
-		defaultPauseMillisUpper.remove();
-	}
-
-	/**
-	 * Returns the current thread's HTTP context.
-	 */
-	public static HttpClientContext getContext() {
-		return httpContextStore.get();
-	}
-
-	/**
-	 * Manually sets the current thread's HTTP context.
-	 */
-	public static void setContext(HttpClientContext context) {
-		httpContextStore.set(context);
-	}
-
 	private static InheritableThreadLocal<Long> defaultPauseMillisLower = new InheritableThreadLocal<>() { 
 		@Override
 	    protected Long initialValue() {
@@ -273,6 +225,54 @@ public class PFRHttp {
 		, STATUS
 	}
 
+	/******************************************************************************************************
+	 * Clears the current thread's HTTP session state (cookies and HTTP context).
+	 * This should be called by the scheduler at the end of a use case iteration
+	 * to prevent session leakage when threads are reused.
+	 ******************************************************************************************************/
+	public static void resetSession() {
+		cookieStore.remove();
+		httpContextStore.remove();
+	}
+
+	/******************************************************************************************************
+	 * Clears ALL thread-local configuration for the current thread, including
+	 * timeouts, charsets, and proxy settings, returning the thread to a clean
+	 * state.
+	 ******************************************************************************************************/
+	public static void resetThreadState() {
+		resetSession();
+		proxyPacFile.remove();
+		keystorePath.remove();
+		keystorePW.remove();
+		keystoreManagerPW.remove();
+		defaultHeaders.remove();
+		defaultUserAgent.remove();
+		defaultBodyCharset.remove();
+		defaultResponseTimeoutMillis.remove();
+		defaultConnectTimeoutMillis.remove();
+		defaultSocketTimeoutMillis.remove();
+		debugLogAll.remove();
+		debugLogFail.remove();
+		throwOnFail.remove();
+		defaultPauseMillisLower.remove();
+		defaultPauseMillisUpper.remove();
+	}
+
+	/******************************************************************************************************
+	 * Returns the current thread's HTTP context.
+	 ******************************************************************************************************/
+	public static HttpClientContext getContext() {
+		return httpContextStore.get();
+	}
+
+	/******************************************************************************************************
+	 * Manually sets the current thread's HTTP context.
+	 ******************************************************************************************************/
+	public static void setContext(HttpClientContext context) {
+		httpContextStore.set(context);
+	}
+	
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
 	 * Enable debug logs for the current user thread for all request, regardless if they are successful
@@ -451,12 +451,16 @@ public class PFRHttp {
 
 	/******************************************************************************************************
 	 * <b>Scope:</b> Global <br>
-	 * <b>IMPORTANT:</b> Must be called before the first request is sent.<br>
 	 * Set the maximum total number of connections in the pool.
 	 * Default: 1000
 	 ******************************************************************************************************/
 	public static void defaultMaxTotalConnections(int max) {
+		
 		PFRHttp.maxTotalConnections.set(max);
+		
+		if(connectionManager != null) {
+			connectionManager.setMaxTotal(max);
+		}
 	}
 
 	/******************************************************************************************************
@@ -473,7 +477,13 @@ public class PFRHttp {
 	 * Default: 200
 	 ******************************************************************************************************/
 	public static void defaultMaxPerRouteConnections(int max) {
+		
 		PFRHttp.maxPerRouteConnections.set(max);
+		
+		if(connectionManager != null) {
+			connectionManager.setDefaultMaxPerRoute(max);
+		}
+		
 	}
 
 	/******************************************************************************************************
