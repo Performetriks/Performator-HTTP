@@ -37,7 +37,7 @@ public class PFRSocketFactory implements ConnectionSocketFactory {
 	public Socket connectSocket(TimeValue connectTimeout, Socket socket, HttpHost host, InetSocketAddress remoteAddress,
 			InetSocketAddress localAddress, HttpContext context) throws IOException {
 
-		String metric = PFRHttp.currentMetricName();
+		String metric = HSR.currentMetricName();
 
 		if (metric != null && PFRHttp.defaultMeasureConnect()) {
 			HSR.start(metric + "-Connect");
@@ -61,7 +61,7 @@ public class PFRSocketFactory implements ConnectionSocketFactory {
 		public Socket createLayeredSocket(Socket socket, String target, int port, HttpContext context)
 				throws IOException {
 
-			String metric = PFRHttp.currentMetricName();
+			String metric = HSR.currentMetricName();
 			if (metric != null && PFRHttp.defaultMeasureTls()) {
 				HSR.start(metric + "-TLS");
 				try {
@@ -79,7 +79,7 @@ public class PFRSocketFactory implements ConnectionSocketFactory {
 		public Socket createLayeredSocket(Socket socket, String target, int port, Object attachment,
 				HttpContext context)
 				throws IOException {
-			String metric = PFRHttp.currentMetricName();
+			String metric = HSR.currentMetricName();
 			if (metric != null && PFRHttp.defaultMeasureTls()) {
 				HSR.start(metric + "-TLS");
 				try {

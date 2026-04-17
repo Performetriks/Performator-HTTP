@@ -113,13 +113,6 @@ public class PFRHttp {
 	private static InheritableThreadLocal<String> defaultUserAgent = new InheritableThreadLocal<>();
 
 
-	public static String currentMetricName() {
-		if(HSR.getActiveItem() != null) {
-			return HSR.getActiveItem().name();
-		}
-		return null;
-	}
-
 	static InheritableThreadLocal<BasicCookieStore> cookieStore = new InheritableThreadLocal<>() { 
 		@Override
 	    protected BasicCookieStore initialValue() {

@@ -30,7 +30,7 @@ public class PFRDnsResolver implements DnsResolver {
 	@Override
 	public InetAddress[] resolve(String host) throws UnknownHostException {
 
-		String metric = PFRHttp.currentMetricName();
+		String metric = HSR.currentMetricName();
 
 		if (metric != null && PFRHttp.defaultMeasureDns()) {
 			HSR.start(metric + "-DNS");
