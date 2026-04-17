@@ -310,11 +310,11 @@ public class PFRHttpRequestBuilder {
 	 * Will put the measured values into buckets for easier analysis. 
 	 * 
 	 * @param value the current values used to determine the range
-	 * @param initial the initial range
+	 * @param initialRange the initial range
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder measureRange(int value, int initial) {
+	public PFRHttpRequestBuilder measureRange(int value, int initialRange) {
 		
-		return measureRange(null, value, initial);
+		return measureRange(null, value, initialRange);
 		
 	}
 	/***************************************************************************
@@ -323,15 +323,15 @@ public class PFRHttpRequestBuilder {
 	 * 
 	 * @param suffix the suffix that should be added to the metric name
 	 * @param value the current value used to determine the range
-	 * @param initial the initial range
+	 * @param initialRange the initial range
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder measureRange(String suffix, int value, int initial) {
+	public PFRHttpRequestBuilder measureRange(String suffix, int value, int initialRange) {
 		
 		if(ranges == null) {
 			ranges = new ArrayList<>();
 		}
 		
-		ranges.add( new Range(suffix, value, initial) );
+		ranges.add( new Range(suffix, value, initialRange) );
 		
 		return this;
 		
