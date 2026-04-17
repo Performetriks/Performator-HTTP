@@ -1,5 +1,6 @@
 package com.performetriks.performator.http;
 
+import com.google.gson.JsonObject;
 import com.performetriks.performator.base.PFRContext;
 import com.performetriks.performator.http.PFRHttp.PFRHttpSection;
 import com.xresch.hsr.base.HSR;
@@ -147,9 +148,16 @@ public class PFRHttpCheck {
 	 ***********************************************/
 	private boolean checkHeader(PFRHttpResponse r) {
 		
-		String headerValue = r.getHeadersAsJson().get(headerName).getAsString();
-
-		boolean success = HSR.Text.checkTextForContent(checkType, headerValue, valueToCheck);
+		JsonObject headers =  r.getHeadersAsJson();
+		
+		boolean success = false;
+		if(headers.has(headerName)) {
+			String headerValue = r.getHeadersAsJson().get(headerName).getAsString();
+			success = HSR.Text.checkTextForContent(checkType, headerValue, valueToCheck);
+		}else {
+			messageOnFail = "HTTP response check failed: Header \""+headerName+"\" was not present.";
+			success = false;
+		}
 		
 		if(!success) { logMessage(r); }
 		
@@ -193,7 +201,7 @@ public class PFRHttpCheck {
 				.append("HTTP response check failed: ")
 				.append(section.toString().toLowerCase())
 				.append(" ")
-				.append( (headerName != null) ? "\""+headerName+"\"" : "")
+				.append( (headerName != null) ? "\""+headerName+"\" " : "")
 				.append(checkType.toString())
 				.append(" \"")
 				.append(valueToCheck)
