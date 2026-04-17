@@ -3,15 +3,14 @@ package com.performetriks.performator.http;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.concurrent.Executors;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.hc.client5.http.SystemDefaultDnsResolver;
 import org.apache.hc.client5.http.auth.AuthSchemeFactory;
@@ -20,14 +19,6 @@ import org.apache.hc.client5.http.auth.KerberosConfig;
 import org.apache.hc.client5.http.auth.KerberosCredentials;
 import org.apache.hc.client5.http.auth.NTCredentials;
 import org.apache.hc.client5.http.auth.StandardAuthScheme;
-import org.apache.hc.client5.http.classic.methods.HttpDelete;
-import org.apache.hc.client5.http.classic.methods.HttpGet;
-import org.apache.hc.client5.http.classic.methods.HttpHead;
-import org.apache.hc.client5.http.classic.methods.HttpOptions;
-import org.apache.hc.client5.http.classic.methods.HttpPatch;
-import org.apache.hc.client5.http.classic.methods.HttpPost;
-import org.apache.hc.client5.http.classic.methods.HttpPut;
-import org.apache.hc.client5.http.classic.methods.HttpTrace;
 import org.apache.hc.client5.http.classic.methods.HttpUriRequestBase;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.auth.BasicScheme;
@@ -42,11 +33,10 @@ import org.apache.hc.client5.http.impl.auth.NTLMSchemeFactory;
 import org.apache.hc.client5.http.impl.auth.SPNegoSchemeFactory;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
-import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.http.ContentType;
-import org.apache.hc.core5.http.Header;
 import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.Method;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.impl.DefaultConnectionReuseStrategy;
 import org.apache.hc.core5.http.io.entity.StringEntity;
@@ -62,6 +52,7 @@ import com.xresch.hsr.stats.HSRExpression.Operator;
 import com.xresch.hsr.stats.HSRRecordStats.HSRMetric;
 import com.xresch.hsr.stats.HSRSLA;
 import com.xresch.xrutils.data.ByteSize;
+import com.xresch.xrutils.data.XRValue;
 import com.xresch.xrutils.utils.XRText.CheckType;
 
 
@@ -91,7 +82,7 @@ public class PFRHttpRequestBuilder {
 	ByteSize measuredSize = null;
 	
 	String metricName = null;
-	String method = "GET";
+	Method method = Method.GET;
 	String URL = null;
 	String body = null;
 	
@@ -134,7 +125,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to GET
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder GET() {
-		method = "GET";
+		method = Method.GET;
 		return this;
 	}
 	
@@ -142,7 +133,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to POST
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder POST() {
-		method = "POST";
+		method = Method.POST;
 		return this;
 	}
 	
@@ -150,7 +141,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to PUT
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder PUT() {
-		method = "PUT";
+		method = Method.PUT;
 		return this;
 	}
 	
@@ -158,7 +149,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to DELETE
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder DELETE() {
-		method = "DELETE";
+		method = Method.DELETE;
 		return this;
 	}
 	
@@ -166,7 +157,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to OPTIONS
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder OPTIONS() {
-		method = "OPTIONS";
+		method = Method.OPTIONS;
 		return this;
 	}
 	
@@ -174,7 +165,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to HEAD
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder HEAD() {
-		method = "HEAD";
+		method = Method.HEAD;
 		return this;
 	}
 	
@@ -182,7 +173,7 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to PATCH
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder PATCH() {
-		method = "PATCH";
+		method = Method.PATCH;
 		return this;
 	}
 	
@@ -190,25 +181,73 @@ public class PFRHttpRequestBuilder {
 	 * Set request method to TRACE
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder TRACE() {
-		method = "TRACE";
+		method = Method.TRACE;
 		return this;
 	}
 	
 	/***************************************************************************
 	 * Set request method to a customized method.
 	 ***************************************************************************/
-	public PFRHttpRequestBuilder METHOD(String method) {
+	public PFRHttpRequestBuilder METHOD(Method method) {
+		if(method == null) { return this; }
+		
 		this.method = method;
+		return this;
+	}
+	/***************************************************************************
+	 * Set request method to a customized method.
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder METHOD(String method) {
+		if(method == null) { return this; }
+		
+		this.method = Method.valueOf(method.trim().toUpperCase());
 		return this;
 	}
 	
 	/***************************************************************************
-	 * Add a parameter to the request.
+	 * Add a parameter to the request, does nothing if the value is null.
+	 * @return instance for chaining
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder param(String name, String value) {
+		if(value == null) { return this; }
 		params.put(name, value);
 		return this;
 	}
+	
+	/***************************************************************************
+	 * Add a parameter to the request, does nothing if the value is null.
+	 * @return instance for chaining
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder param(String name, XRValue value) {
+		if(value == null
+		|| value.isNull()) { return this; }
+		params.put(name, value.getAsString());
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Add a parameter to the request, does nothing if the value is null.
+	 * Uses the toString() method of the Number instance to convert it to 
+	 * a string.
+	 * @return instance for chaining
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder param(String name, Number value) {
+		if(value == null) { return this; }
+		params.put(name, value.toString());
+		return this;
+	}
+	
+	/***************************************************************************
+	 * Add a parameter to the request, does nothing if the value is null.
+	 * @return instance for chaining
+	 ***************************************************************************/
+	public PFRHttpRequestBuilder param(String name, Boolean value) {
+		if(value == null) { return this; }
+		params.put(name, value.toString());
+		return this;
+	}
+	
+
 	
 	
 	/***************************************************************************
@@ -975,7 +1014,7 @@ public class PFRHttpRequestBuilder {
 
 			//---------------------------------
 			// Create Request Base
-			HttpUriRequestBase requestBase = new HttpUriRequestBase(method, URI.create(urlWithParams));
+			HttpUriRequestBase requestBase = new HttpUriRequestBase(method.toString(), URI.create(urlWithParams));
 			
 			requestBase.setConfig(
 					 RequestConfig
