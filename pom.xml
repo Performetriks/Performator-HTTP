@@ -49,13 +49,20 @@
 
 	<!-- ================= DEPENDENCIES ================== -->
 	<dependencies>
-			
-		<!-- https://mvnrepository.com/artifact/com.xresch/hsr -->
+				
+		<!-- https://mvnrepository.com/artifact/com.performetriks/performator -->
 		<dependency>
 		    <groupId>com.performetriks</groupId>
 		    <artifactId>performator</artifactId>
 		    <version>1.2.3</version>
 		    <scope>provided</scope>
+		</dependency>
+		
+		<!-- https://mvnrepository.com/artifact/com.xresch/xrscripting -->
+		<dependency>
+			<groupId>com.xresch</groupId>
+			<artifactId>xrscripting</artifactId>
+			<version>1.1.1</version>
 		</dependency>
 		
 		<dependency>
@@ -72,20 +79,6 @@
 		    <version>5.4.1</version>
 		</dependency>
 		
-		<!-- https://mvnrepository.com/artifact/org.graalvm.js/js -->
-		<dependency>
-		    <groupId>org.graalvm.js</groupId>
-		    <artifactId>js</artifactId>
-		    <version>25.0.0</version>
-		    <type>pom</type>
-		</dependency>
-		
-		<!-- https://mvnrepository.com/artifact/org.graalvm.js/js-scriptengine -->
-		<dependency>
-		    <groupId>org.graalvm.js</groupId>
-		    <artifactId>js-scriptengine</artifactId>
-		    <version>25.0.0</version>
-		</dependency>
 				
 		<!-- ========================================================================== -->
 		<!-- ============================ SCOPE: TESTING ============================== -->

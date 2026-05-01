@@ -33,6 +33,7 @@ import org.apache.hc.client5.http.cookie.Cookie;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
+import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.client5.http.routing.HttpRoutePlanner;
 import org.apache.hc.client5.http.socket.ConnectionSocketFactory;
 import org.apache.hc.client5.http.socket.PlainConnectionSocketFactory;
@@ -44,7 +45,6 @@ import org.apache.hc.core5.http.config.Registry;
 import org.apache.hc.core5.http.config.RegistryBuilder;
 import org.apache.hc.core5.http.io.SocketConfig;
 import org.apache.hc.core5.http.protocol.HttpContext;
-import org.apache.hc.client5.http.protocol.HttpClientContext;
 import org.apache.hc.core5.ssl.SSLContextBuilder;
 import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.hc.core5.ssl.TrustStrategy;
@@ -55,13 +55,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
-import com.performetriks.performator.http.scriptengine.PFRScripting;
-import com.performetriks.performator.http.scriptengine.PFRScriptingContext;
 import com.xresch.hsr.base.HSR;
+import com.xresch.xrscripting.XRScripting;
+import com.xresch.xrscripting.XRScriptingContext;
+import com.xresch.xrscripting.proxypac.HttpPacScriptMethods;
 import com.xresch.xrutils.utils.XRTimeUnit;
-
-import org.apache.hc.core5.pool.PoolConcurrencyPolicy;
-import org.apache.hc.core5.pool.PoolReusePolicy;
 
 /***************************************************************************
  * 
@@ -79,7 +77,7 @@ public class PFRHttp {
 	private static PoolingHttpClientConnectionManager connectionManager = null;
 	
 	//Use Threadlocal to avoid polyglot multi thread exceptions
-	private static ThreadLocal<PFRScriptingContext> javascriptEngine = new ThreadLocal<PFRScriptingContext>();
+	private static ThreadLocal<XRScriptingContext> javascriptEngine = new ThreadLocal<XRScriptingContext>();
 	
 	private static KeyStore cachedKeyStore = null;
 	
@@ -699,10 +697,10 @@ public class PFRHttp {
 	/******************************************************************************************************
 	 * 
 	 ******************************************************************************************************/
-	private static PFRScriptingContext getScriptContext() {
+	private static XRScriptingContext getScriptContext() {
 		
 		if(javascriptEngine.get() == null) {
-			javascriptEngine.set( PFRScripting.createJavascriptContext().putMemberWithFunctions( new HttpPacScriptMethods()) );
+			javascriptEngine.set( XRScripting.createJavascriptContext().putMemberWithFunctions( new HttpPacScriptMethods()) );
 			
 			//------------------------------
 			// Add to engine if pac loaded
@@ -711,7 +709,7 @@ public class PFRHttp {
 				//Prepend method calls with PRFHttpPacScriptMethods
 				proxyPAC = HttpPacScriptMethods.preparePacScript(proxyPAC);
 
-				PFRScriptingContext polyglot = getScriptContext();
+				XRScriptingContext polyglot = getScriptContext();
 
 			    polyglot.addScript("proxy.pac", proxyPAC);
 			    polyglot.executeScript("FindProxyForURL('localhost:9090/test', 'localhost');");
