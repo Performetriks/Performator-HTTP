@@ -21,15 +21,19 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.InflaterInputStream;
 
 import org.apache.hc.client5.http.HttpRoute;
 import org.apache.hc.client5.http.config.ConnectionConfig;
 import org.apache.hc.client5.http.cookie.BasicCookieStore;
 import org.apache.hc.client5.http.cookie.Cookie;
+import org.apache.hc.client5.http.entity.InputStreamFactory;
 import org.apache.hc.client5.http.impl.classic.HttpClientBuilder;
 import org.apache.hc.client5.http.impl.cookie.BasicClientCookie;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
@@ -50,6 +54,7 @@ import org.apache.hc.core5.ssl.SSLContexts;
 import org.apache.hc.core5.ssl.TrustStrategy;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
+import org.brotli.dec.BrotliInputStream;
 import org.graalvm.polyglot.Value;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1089,6 +1094,34 @@ public class PFRHttp {
 	 ******************************************************************************************************/
 	public static void clearCookiesExpired() {
 		cookieStore.get().clearExpired(Instant.now());
+	}
+	
+	/******************************************************************************************************
+	 * Adds a brotli decoder to the client Builder
+	 * @return 
+	 * 
+	 ******************************************************************************************************/
+	public static void addContentDecoders(HttpClientBuilder clientBuilder) {
+		
+		// The below "::new" syntax is a shorthand for basically the following:
+//		InputStreamFactory gzipFactory = new InputStreamFactory() {
+//		    @Override public InputStream create(InputStream inputStream) {
+//		       return new GZIPInputStream(inputStream);
+//		    }
+//		};
+
+		InputStreamFactory brotliFactory = BrotliInputStream::new;
+		InputStreamFactory gzipFactory = GZIPInputStream::new;
+		InputStreamFactory deflateFactory = InflaterInputStream::new;
+
+	    LinkedHashMap<String, InputStreamFactory> decoderMap = new LinkedHashMap<>();
+
+	    decoderMap.put("gzip", gzipFactory);
+	    decoderMap.put("x-gzip", gzipFactory);
+	    decoderMap.put("br", brotliFactory);
+	    decoderMap.put("deflate", deflateFactory);
+	    
+	    clientBuilder.setContentDecoderRegistry(decoderMap);
 	}
 	
 	/******************************************************************************************************

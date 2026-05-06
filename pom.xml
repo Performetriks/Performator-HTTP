@@ -79,6 +79,13 @@
 		    <version>5.4.1</version>
 		</dependency>
 		
+		<!-- Source: https://mvnrepository.com/artifact/org.brotli/dec -->
+		<dependency>
+		    <groupId>org.brotli</groupId>
+		    <artifactId>dec</artifactId>
+		    <version>0.1.2</version>
+		    <scope>compile</scope>
+		</dependency>
 				
 		<!-- ========================================================================== -->
 		<!-- ============================ SCOPE: TESTING ============================== -->

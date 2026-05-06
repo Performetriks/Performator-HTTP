@@ -988,6 +988,7 @@ public class PFRHttpRequestBuilder {
 								;
 			
 				PFRHttp.httpClientAddProxy(clientBuilder);
+				PFRHttp.addContentDecoders(clientBuilder);
 				
 				httpClientSingle = clientBuilder.build();
 				// httpClient.set( clientBuilder.build());
