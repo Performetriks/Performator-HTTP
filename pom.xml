@@ -49,6 +49,14 @@
 
 	<!-- ================= DEPENDENCIES ================== -->
 	<dependencies>
+		
+		<!-- https://mvnrepository.com/artifact/com.xresch/hsr -->
+		<dependency>
+		    <groupId>com.xresch</groupId>
+		    <artifactId>hsr</artifactId>
+		    <version>1.5.0</version>
+		    <scope>provided</scope>
+		</dependency>
 				
 		<!-- https://mvnrepository.com/artifact/com.performetriks/performator -->
 		<dependency>

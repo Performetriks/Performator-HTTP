@@ -1029,14 +1029,15 @@ public class PFRHttpRequestBuilder {
 			// Handle POST Body			
 			if (body != null) {
 
-			    ContentType type;
+			    ContentType type = null;
 
 			    if (!lowercaseHeaders.containsKey(HEADER_CONTENT_TYPE)) {
 			        type = ContentType.create("text/plain", bodyCharset);
 			    } else {
 			        type = ContentType.parse(lowercaseHeaders.get(HEADER_CONTENT_TYPE));
 
-			        if (type.getCharset() == null) {
+			        if (type != null 
+			        && type.getCharset() == null) {
 			            type = type.withCharset(bodyCharset);
 			        }
 			    }
