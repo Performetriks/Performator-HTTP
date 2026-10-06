@@ -61,6 +61,7 @@ import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Strings;
 import com.xresch.hsr.base.HSR;
+import com.xresch.hsr.stats.HSRSLA;
 import com.xresch.xrscripting.XRScripting;
 import com.xresch.xrscripting.XRScriptingContext;
 import com.xresch.xrscripting.proxypac.HttpPacScriptMethods;
@@ -133,6 +134,8 @@ public class PFRHttp {
 	};
 
 	private static InheritableThreadLocal<HashMap<String, String>> defaultHeaders =  new InheritableThreadLocal<>();
+	
+	private static InheritableThreadLocal<HSRSLA> defaultSLA =  new InheritableThreadLocal<>();
 	
 	private static InheritableThreadLocal<Charset> defaultBodyCharset =  new InheritableThreadLocal<>() { 
 		@Override
@@ -358,6 +361,27 @@ public class PFRHttp {
 	 ******************************************************************************************************/
 	public static HashMap<String, String> defaultHeaders() {
 		return defaultHeaders.get();
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Sets(overrides) the default headers for all the requests of the current thread. These headers will always
+	 * be added first to any request and can be enhanced and overridden with any additional headers specified
+	 * on the request. 
+	 * 
+	 * @param map of values
+	 ******************************************************************************************************/
+	public static void defaultSLA(HSRSLA sla) {
+		defaultSLA.set(sla);
+	}
+	
+	/******************************************************************************************************
+	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>
+	 * Returns the default headers for all the requests of the current thread.
+	 ******************************************************************************************************/
+	public static HSRSLA defaultSLA() {
+		return defaultSLA.get();
+
 	}
 	/******************************************************************************************************
 	 * <b>Scope:</b> Propagated (Inheritable Thread Local) <br>

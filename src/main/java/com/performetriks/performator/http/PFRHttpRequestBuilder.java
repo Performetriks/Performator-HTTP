@@ -95,7 +95,7 @@ public class PFRHttpRequestBuilder {
 	record Range (String suffix, int rangeValue, int rangeInitial) {};
 	ArrayList<Range> ranges;
 	
-	HSRSLA sla = null;
+	HSRSLA sla =  PFRHttp.defaultSLA();
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
 	
 	HashMap<String, String> params = new HashMap<>();
