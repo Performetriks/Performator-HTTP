@@ -206,6 +206,14 @@ public class PFRHttpResponse {
 	 ******************************************************************************************************/
 	public void printDebugLog() {
 		
+		PFRHttp.logger.info( getDebugLogString() );
+	}
+	
+	/******************************************************************************************************
+	 * @return String the string containing the debug log information.
+	 ******************************************************************************************************/
+	public String getDebugLogString() {
+		
 		String paramsString = (request.params == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.params);
 		String headersString = (request.lowercaseHeaders == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.lowercaseHeaders);
 		
@@ -249,7 +257,7 @@ public class PFRHttpResponse {
 			.append("\n########\n")
 			;
 
-		PFRHttp.logger.info(builder.toString());
+		return builder.toString();
 	}
 	
 	

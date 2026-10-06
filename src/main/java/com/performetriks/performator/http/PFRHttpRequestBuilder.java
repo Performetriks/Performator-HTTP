@@ -428,7 +428,9 @@ public class PFRHttpRequestBuilder {
 	}
 	
 	/***************************************************************************
-	 * Add a request Body in JSON format UTF-8 encoding
+	 * Add a request Body in JSON format with content type 
+	 * "application/json; charset=UTF-8".
+	 * 
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder bodyJSON(String content) {
 		return this.body("application/json; charset=UTF-8", content);
@@ -1026,22 +1028,45 @@ public class PFRHttpRequestBuilder {
 					);
 			
 			//-----------------------------------
+			// Handle headers
+			if(lowercaseHeaders != null ) {
+				for(Entry<String, String> header : lowercaseHeaders.entrySet()) {
+					// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
+					String name = header.getKey();
+					
+					if( isIncludedHeader(name) ){
+						String value =  header.getValue();
+						
+						if(value != null) {
+							requestBase.addHeader(header.getKey(), value);
+						}
+					}
+				}
+			}
+			
+			//-----------------------------------
 			// Handle POST Body			
 			if (body != null) {
 
+			    //---------------------
+			    // Retrieve Content Type
 			    ContentType type = null;
 
-			    if (!lowercaseHeaders.containsKey(HEADER_CONTENT_TYPE)) {
-			        type = ContentType.create("text/plain", bodyCharset);
-			    } else {
+			    if ( lowercaseHeaders.containsKey(HEADER_CONTENT_TYPE) ) {
+			    	
 			        type = ContentType.parse(lowercaseHeaders.get(HEADER_CONTENT_TYPE));
 
 			        if (type != null 
 			        && type.getCharset() == null) {
+			        	// set Charset manually
 			            type = type.withCharset(bodyCharset);
 			        }
 			    }
 
+			    //---------------------
+			    // Add Body
+			    // IMPORTANT: Setting this with type=null is needed
+			    // to avoid Apache Http Client to auto detect ContentType
 			    requestBase.setEntity( new StringEntity(body, type) );
 			}
 			
@@ -1147,19 +1172,6 @@ public class PFRHttpRequestBuilder {
 				
 			}
 			
-			//-----------------------------------
-			// Handle headers
-			if(lowercaseHeaders != null ) {
-				for(Entry<String, String> header : lowercaseHeaders.entrySet()) {
-					// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
-					String name = header.getKey();
-					
-					if( isIncludedHeader(name) ){
-						requestBase.addHeader(header.getKey(), header.getValue());
-					}
-				}
-			}
-
 			//-----------------------------------
 			// Connect and create response
 
