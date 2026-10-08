@@ -23,6 +23,7 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1083,7 +1084,7 @@ public class PFRHttp {
 	 * @param basicUsername
 	 * @param basicPassword
 	 ******************************************************************************************************/
-	public static void addBasicAuthorizationHeader(HashMap<String, String> headers, String basicUsername, String basicPassword) {
+	public static void addBasicAuthorizationHeader(Map<String, String> headers, String basicUsername, String basicPassword) {
 		
 		String valueToEncode = basicUsername + ":" + basicPassword;
 		headers.put("Authorization", "Basic "+Base64.getEncoder().encodeToString(valueToEncode.getBytes()));	    	

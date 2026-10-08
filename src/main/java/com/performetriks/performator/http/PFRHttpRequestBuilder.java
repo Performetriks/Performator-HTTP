@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -99,7 +100,7 @@ public class PFRHttpRequestBuilder {
 	ArrayList<PFRHttpCheck> checksList = new ArrayList<>();
 	
 	HashMap<String, String> params = new HashMap<>();
-	HashMap<String, String> lowercaseHeaders = new HashMap<>();
+	TreeMap<String, String> caseInsensitiveHeaders = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
 		
 	/***************************************************************************
 	 * 
@@ -266,7 +267,7 @@ public class PFRHttpRequestBuilder {
 	 * Add a header
 	 ***************************************************************************/
 	public PFRHttpRequestBuilder header(String name, String value) {
-		lowercaseHeaders.put(name.trim().toLowerCase(), value);
+		caseInsensitiveHeaders.put(name, value);
 		return this;
 	}
 	
@@ -1029,8 +1030,8 @@ public class PFRHttpRequestBuilder {
 			
 			//-----------------------------------
 			// Handle headers
-			if(lowercaseHeaders != null ) {
-				for(Entry<String, String> header : lowercaseHeaders.entrySet()) {
+			if(caseInsensitiveHeaders != null ) {
+				for(Entry<String, String> header : caseInsensitiveHeaders.entrySet()) {
 					// add all headers except pseudo headers and headers automatically handled by Apache HTTP Client
 					String name = header.getKey();
 					
@@ -1038,7 +1039,7 @@ public class PFRHttpRequestBuilder {
 						String value =  header.getValue();
 						
 						if(value != null) {
-							requestBase.addHeader(header.getKey(), value);
+							requestBase.addHeader(name, value);
 						}
 					}
 				}
@@ -1052,9 +1053,9 @@ public class PFRHttpRequestBuilder {
 			    // Retrieve Content Type
 			    ContentType type = null;
 
-			    if ( lowercaseHeaders.containsKey(HEADER_CONTENT_TYPE) ) {
+			    if ( caseInsensitiveHeaders.containsKey(HEADER_CONTENT_TYPE) ) {
 			    	
-			        type = ContentType.parse(lowercaseHeaders.get(HEADER_CONTENT_TYPE));
+			        type = ContentType.parse(caseInsensitiveHeaders.get(HEADER_CONTENT_TYPE));
 
 			        if (type != null 
 			        && type.getCharset() == null) {
@@ -1109,7 +1110,7 @@ public class PFRHttpRequestBuilder {
 					//------------------------------
 					// Basic 
 					case BASIC_HEADER:
-						PFRHttp.addBasicAuthorizationHeader(lowercaseHeaders, username, new String(pwdArray));
+						PFRHttp.addBasicAuthorizationHeader(caseInsensitiveHeaders, username, new String(pwdArray));
 					break;
 					
 					

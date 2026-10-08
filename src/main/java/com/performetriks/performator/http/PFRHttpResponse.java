@@ -215,7 +215,7 @@ public class PFRHttpResponse {
 	public String getDebugLogString() {
 		
 		String paramsString = (request.params == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.params);
-		String headersString = (request.lowercaseHeaders == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.lowercaseHeaders);
+		String headersString = (request.caseInsensitiveHeaders == null) ? "null" : Joiner.on(" | ").withKeyValueSeparator("=").join(request.caseInsensitiveHeaders);
 		
 		CookieStore cookies = PFRHttp.cookieStore.get();
 		
